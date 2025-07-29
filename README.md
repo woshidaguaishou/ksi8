@@ -1,93 +1,214 @@
-# ksi8
-for personal
-AWSインフラ改善提案書 - JRプロジェクト向け
 
-■ 背景と現状課題
-現在のAWS設計の問題点：
 
-Network Firewallが検査用VPCに集約、経路混在と負荷集中
+非常好，你现在引用的是 KDDI 官方的「アクセスライン仕様概略」页面：
 
-Fargate中心のバッチ運用、冷機起動による高負荷時の不安定性
+> 🔗 [https://wvs2document.com/access-line-overview/](https://wvs2document.com/access-line-overview/)
 
-TGW経路設計の複雑化、トラブル時のデバッグ困難
+你关注的是「**マルチクラウドGW（Multi-Cloud Gateway）× AWS**」相关的接入类型、带宽单位、VLAN 与 QoS 配置限制。
 
-出入口・内部トラフィックの経路論理分離が不完全
+下面我来帮你逐条**对应解释你该怎么写申请书 / 建 VIF / 配 VGW**，以及 KDDI 会提供什么、你该提供什么。
 
-災害復旧（DR）・高可用性対策が限定的
+---
 
-■ 改善提案概要（論理的分離構成）
+## ✅ 页面中的关键信息解释：
 
-【1】TGW星型構造の維持 + 経路論理分離
+| 项目     | 内容与含义                                                                                 |
+| ------ | ------------------------------------------------------------------------------------- |
+| メニュー   | 本接入线路用于连接 AWS / GCP / Oracle 等 → 你当前用途正是连接 AWS DX                                     |
+| 帯域タイプ  | 「帯域確保型」 = 保证型专线，不是 Best Effort；你使用的 400M、200M 等都属于此                                   |
+| 帯域     | 可选范围如下：<br>• 1G 接口时 → 100Mbps～1Gbps（每100Mbps单位）<br>• 10G 接口时 → 1Gbps～10Gbps（每1Gbps单位） |
+| QoS    | QoS 利用不可（不支持优先级调度）                                                                    |
+| VLAN制御 | VLAN 指定不可（由KDDI提供，不是客户自选）                                                             |
 
-TGWは中心Hub構成を維持（AWS設計基準に準拠）
+---
 
-ルートテーブル・Attachment単位で南北・東西経路を厳密分離
+## ✅ 基于这些条件，你应该如何准备各方信息？
 
-【2】Firewall配置の最適化
+---
 
-出口VPC：専用AWS Network Firewall配置（南向き出力トラフィック監査）
+## 🧾 一、你（AWS端）需要准备/决定的内容：
 
-入口VPC：専用AWS Network Firewall配置（北向き入力トラフィック監査）
+| 项目                      | 填写建议                                      | 说明                          |
+| ----------------------- | ----------------------------------------- | --------------------------- |
+| Direct Connect Location | 例：Tokyo (Equinix TY2)                     | KDDI DX 会连到这个 DX POP        |
+| DX Connection 接入类型      | Hosted connection（如果由KDDI主导） or Dedicated | 通常是 Hosted                  |
+| Virtual Interface 类型    | Private VIF × 3                           | 对应你的三条业务路径                  |
+| 接入网关                    | TGW（推荐）或 VGW                              | 一般结构建议挂 TGW                 |
+| AWS侧 ASN                | `64512`（默认）或自定义（私有ASN范围）                  | BGP 会话所需                    |
+| AWS侧 Peer IP            | AWS会自动分配，创建VIF时生成                         | BGP会话地址                     |
+| 对端 Peer IP              | KDDI提供（你之前截图里就有，例如 `175.130.224.65`）      | 填入VIF时用                     |
+| 对端 ASN                  | KDDI提供，可能在站点文档中                           | 用于BGP配置                     |
+| 接入带宽                    | 按照你客户申请订单来写，例如：400Mbps, 100Mbps 等         | 不由你决定，但你要写入申请书草案            |
+| VLAN ID                 | 不要自己指定 → 等KDDI分配后填写                       | KDDI强制管理VLAN，AWS这边创建VIF时需填写 |
 
-検査用VPCは必要最小限に整理、経路混在を排除
+---
 
-【3】南北向経路の完全分離
+## 🧾 二、KDDI（客户侧）必须提供或确认的内容：
 
-出入口経路を物理的・論理的に区分
+| 项目                             | 说明                                   |
+| ------------------------------ | ------------------------------------ |
+| 物理接入点（POP）                     | KDDI连接 AWS 的接入点，例：Equinix TY2        |
+| Hosted Connection ID（如KDDI是托管） | AWS提供的 connection ID（或由他们在 AWS上代为创建） |
+| VLAN ID                        | 每条回线分配一个 VLAN（你需要在VIF里填写）            |
+| 客户BGP Peer IP & ASN            | `175.130.224.65` 等，每条线不一样；ASN应统一     |
+| 是否做NAT / Appliance             | 若启用会影响你收到的源IP，是否开启由客户/KDDI决定         |
+| 回线路由策略                         | 哪些路径需要 BGP（例如移动终端回线），哪些静态 → 你配置时会用   |
 
-Firewallポリシーも独立設定、負荷と役割を分散
+---
 
-【4】東西向トラフィック管理の最適化
+## ✅ 举个典型 VIF 创建流程（你侧 AWS 控制台）：
 
-TGW内ルートテーブルで経路を明確制御
+```plaintext
+名称: VIF-Business-400M
+类型: Private VIF
+Connection: 由KDDI提供的 Hosted DX Connection
+VLAN: 由KDDI指定（例：101）
+AWS ASN: 64512
+AWS Peer IP: 自动生成（例：169.254.100.2/30）
+Customer Peer IP: 175.130.224.65（图中）
+Customer ASN: 64513（假设KDDI使用）
+接入目标: TGW
+```
 
-内部VPC間通信は必要時のみPrivateLink経路を活用（重要データや性能要件対応）
+---
 
-【5】出力経路固定化
+## ✅ 最终关键对应总结表（写申请书时对照用）
 
-全VPC共通の出力経路をEgress VPC/NAT Gatewayに統一
+| 申请书字段/配置参数       | 谁来提供？   | 内容例                    | 你该怎么处理           |
+| ---------------- | ------- | ---------------------- | ---------------- |
+| 帯域（带宽）           | 客户决定    | 400Mbps / 100Mbps      | 写入申请书VIF草案       |
+| VLAN ID          | KDDI提供  | 如 VLAN 101 / 102 / 103 | 创建 VIF 时填写（不可自定） |
+| AWS Peer IP      | AWS自动生成 | 如 169.254.100.2        | 填给KDDI对端配置用      |
+| Customer Peer IP | KDDI提供  | 如 175.130.224.65       | 创建VIF时填写         |
+| AWS ASN          | 你决定     | 默认 64512（或自定义）         | BGP中使用           |
+| Customer ASN     | KDDI提供  | 如 64513（KDDI标准ASN）     | 写入VIF配置          |
+| VIF挂载目标          | 你决定     | TGW（推荐）或 VGW           | 创建VIF时选择         |
+| BGP使用有无          | 客户决定    | 是（对5G/移动终端通道）          | 必须启用             |
 
-回信（戻りトラフィック）経路の単一化、安定性向上
+---
 
-経路漂流やブラックホール化を防止
+## ✅ 最后一句话总结：
 
-■ 技術的根拠と公式資料
+> **你只需要：准备 AWS VIF/BGP 配置草案；不要指定 VLAN；不要设 QoS；不要自选带宽；不要干预KDDI侧网关，只处理你这侧接收接口。**
 
-【公式参照】
+---
 
-AWS Network Firewall ベストプラクティス：
-https://docs.aws.amazon.com/network-firewall/latest/developerguide/best-practices.html
 
-AWS Transit Gateway ルーティング設計ガイド：
-https://docs.aws.amazon.com/vpc/latest/tgw/tgw-route-tables.html
 
-Multi-AZ Firewall構成推奨事項：
-https://docs.aws.amazon.com/network-firewall/latest/developerguide/multi-az-deployment.html
 
-PrivateLinkによるセキュアなVPC間接続：
-https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html
+非常好，你这次贴的这两张图（特别是第2张网络拓扑图）让整个结构和你需要准备的技术内容**完全清晰化了**。我现在帮你以**AWS架构工程师的角度**，结合 Wide Area Virtual Switch 2（WVS2）服务内容，对整套连接进行一次**最终级的结构解析 + VIF构成建议 + 设计理由**。
 
-■ 期待される改善効果
+---
 
-経路の論理明確化、障害影響範囲の局所化
+## ✅ 一、结构图总览总结（你上传的第2张图）
 
-南北向・東西向トラフィックの完全な分離と負荷分散
+### 🔎 图中看到的关键要素：
 
-Firewall機能の役割特化、スケールアウト対応
+| 项目   | 内容                                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------------------ |
+| AWS端 | 有多个VIF符号，连接到右侧 AWS Cloud 标识下的统一VPC或多账户结构                                                                     |
+| 中间回线 | 出现了多条**KDDI连接（带宽明确）**，例如：<br>• 400M (GE Paired)（主干）<br>• 100M (GE)<br>• 1G (BE = Best Effort)<br>• 200M (GE) |
+| 左侧来源 | 多个业务子系统（ICOCA本地管理、JCB、BCP站点等）→ 通过KDDI汇聚                                                                      |
+| 明示路径 | 从业务系统 → 汇聚接入交换（推测为KDDI）→ 多条DX线路 → AWS VIF群                                                                   |
 
-出力経路の固定化による戻りトラフィックの安定性確保
+---
 
-TGW設計の簡素化とデバッグ容易化
+## ✅ 二、结合图 + WVS2方案书标题判断：本次是「マルチクラウドゲートウェイ構成」
 
-高可用性・災害復旧体制の強化、JR水準の信頼性確保
+也就是说，**这是 KDDI WVS2 提供的 Multi-Cloud Gateway 架构**，特征如下：
 
-■ 補足と今後の検討項目
+### 🧠 特征重点：
 
-EKS・EC2の計算リソース管理方針とFargate混在戦略の詳細設計
+| 特征       | 说明                                           |
+| -------- | -------------------------------------------- |
+| 多路径连接    | 客户多业务系统 → 汇聚在 KDDI → 通过多个带宽等级的路径接入 AWS       |
+| 物理网络抽象化  | 所有回线物理路径隐藏在 KDDI WVS2 内，AWS只看到逻辑接口（VIF）      |
+| QoS/分离策略 | 高带宽业务走 GE/paired，低延迟或试验线路走 BE（Best Effort）   |
+| AWS端接入模式 | AWS端实际是：**多个 VIF（至少 3\~4 个）+ 统一 VGW/TGW接收点** |
 
-段階的な経路切替計画、システム影響の最小化案
+---
 
-詳細構成図・運用設計ドキュメントの別途作成対応
+## ✅ 三、结合 WVS2 的两个订单判断：你应准备**至少3个 VIF**
 
-以上の内容に基づき、安全・高可用・高性能なAWSアーキテクチャを段階的に実現可能です。詳細検討のご要望があればご連絡ください。
+| VIF用途         | 路由策略             | 带宽              | 建议操作           |
+| ------------- | ---------------- | --------------- | -------------- |
+| 主业务用 VIF      | 通常静态 or BGP      | 400M GE Paired  | 建VIF1（业务主干）    |
+| 次业务或管理VIF     | 可以静态             | 100M / 200M GE  | 建VIF2（辅助/日常系统） |
+| BCP or 移动端VIF | **需要BGP**，支持路径漂移 | 1G BE（可能有终端移动性） | 建VIF3（带BGP用途）  |
+| 预留实验或PoC用     | 可选               | 50M等低速线         | （如有用再创建VIF4）   |
+
+---
+
+## ✅ 四、关于你之前提问的 “两个WVS2服务 + with F+ + au光 + appliance menu”的再确认
+
+现在可以这样划分其角色：
+
+| 服务名           | 用途                     | 在拓扑图中的角色       | 你是否要处理                       |
+| ------------- | ---------------------- | -------------- | ---------------------------- |
+| WVS2 L3 #1    | 主业务线路                  | 400M、100M回线路径  | ✅ 你建VIF对接                    |
+| WVS2 L3 #2    | BCP、终端移动线路             | 1G Best Effort | ✅ 你建BGP用VIF                  |
+| with F+ アクセス  | 拓扑左下“BCP站点”可能通过此接入     | 接入路径           | ❌ 你无需配置                      |
+| auひかりビジネス     | 可能用于家庭/个人终端 → SmartVPN | 无直接表现，但路径中存在   | ❌ 你无需配置                      |
+| Applianceメニュー | NAT、终端认证、ACL等功能        | KDDI中转中是否转换过IP | ⚠️ 如你发现IP是NAT过的，可知其开启，但你不需操作 |
+
+---
+
+## ✅ 五、推荐配置结构总结：
+
+```plaintext
+KDDI DX物理接入线
+        │
+     [ DX Connection ]
+        │
+  ┌─────┬─────┬─────┐
+  │     │     │     │
+[VIF1][VIF2][VIF3][…]
+  │     │     │
+  ▼     ▼     ▼
+ TGW（推荐）or VGW
+        │
+   VPC群 或 单一VPC
+```
+
+### 每个VIF配置项：
+
+| 项目      | VIF1（主干）          | VIF2（次干） | VIF3（BGP）    |
+| ------- | ----------------- | -------- | ------------ |
+| VLAN    | KDDI提供            | KDDI提供   | KDDI提供       |
+| Peer IP | 图中如 `175.130.x.x` | 同上       | 同上           |
+| BGP ASN | 64512（你侧）         | 可不设（如静态） | ✅设定          |
+| 连接目标    | TGW/ VGW          | 同上       | 同上           |
+| 用途      | 业务系统主通道           | 支持/辅助业务  | 移动终端 / BCP切换 |
+
+---
+
+## ✅ 你下一步操作建议：
+
+1. 向客户确认这 3 条 VIF 对应的：
+
+   * VLAN ID
+   * 对端 BGP Peer IP
+   * 对端 ASN（如不在图中就问KDDI或等他们回）
+2. 你侧先创建：
+
+   * 1个 DX Connection
+   * 3个 Private VIF
+   * 1个 TGW（如已有就不用）
+   * TGW Route Table 和 VPC连接关系
+3. 写出一张 `AWS VIF接続設計表` 交给客户存档 or 拷贝到申请书内
+
+---
+
+如果你需要，我现在可以：
+
+* 📝 生成一份《3VIF技术参数清单（AWS视角）》Word或Excel表格
+* 📊 绘一张 AWS-TGW-多VIF-多VPC连接图
+
+你选哪个？或者都来？
+
+
+📝《AWS側 VIF接続定義書（3系統分）》
+📊《BGPセッションパラメータ確認シート》
+📌《VLAN/Bandwidth記入補助表》
+
 
