@@ -1,0 +1,55 @@
+import os
+import urllib.request
+import urllib.error
+
+
+def lambda_handler(event, context):
+    alb_base_url = os.environ.get("ALB_BASE_URL")
+    if not alb_base_url:
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "text/plain; charset=utf-8"},
+            "body": "Environment variable ALB_BASE_URL is not set"
+        }
+
+    alb_base_url = alb_base_url.rstrip("/")
+
+    raw_path = event.get("rawPath", "/")
+    raw_query = event.get("rawQueryString", "")
+
+    path = raw_path or "/"
+    url = alb_base_url + path
+    if raw_query:
+        url += "?" + raw_query
+
+    try:
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("User-Agent", "Lambda-ALB-Proxy")
+
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body_bytes = resp.read()
+            status = resp.getcode()
+            headers = dict(resp.getheaders())
+
+        content_type = headers.get("Content-Type", "text/html; charset=utf-8")
+        body_str = body_bytes.decode("utf-8", errors="replace")
+
+        return {
+            "statusCode": status,
+            "headers": {"Content-Type": content_type},
+            "body": body_str
+        }
+
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        return {
+            "statusCode": e.code,
+            "headers": {"Content-Type": "text/html; charset=utf-8"},
+            "body": err_body
+        }
+    except Exception as e:
+        return {
+            "statusCode": 502,
+            "headers": {"Content-Type": "text/plain; charset=utf-8"},
+            "body": f"Lambda error: {str(e)}"
+        }
