@@ -1,340 +1,401 @@
-DataSync導入要件説明資料
+第一张图的优先度①，本质是：
 
-Slide 1：データ連携要件とDataSyncによる実現方針
+根据已经收到的ヒアリング结果，对Excel中每一种网络构成选择推荐方案，并说明为什么推荐、什么条件下不能用。
 
-結論
+结合你现在的表格，以及“数据量以100GB为基准”的前提，我建议按下面定。
 
-DCからインターネット経由でS3へデータを転送する要件に対し、DataSyncでどのように解決するかを整理します。
+推荐方案总表
 
-要件と解決方針
+网络构成	推荐方案	推荐结论	备注
+①-1 东京大楼→东京DC	パターン①：Falcon网传输	条件性采用	只有一条候选，具体上传协议仍要确认
+①-2 Internet	パターン③：AWS DataSync	推荐	适合100GB级、定期、自动化传输
+①-2 VPN／DX	パターン②：AWS DataSync	推荐	通过私网端点进行托管式文件传输
+②-1＋②-2 稲沢→MELCO TOP→AWS	パターン①：AWS CLI	推荐	现有路径明确经过HTTP／HTTPS Proxy
+③-1 稲沢→Megcloud共享S3	パターン①：S3 Interface Endpoint	推荐	利用既有闭域连接直接写入共享S3
+③-2 Megcloud稲沢→Data Lake	パターン③：S3 Replication	原则推荐	如必须严格控制执行时间，则改选パターン②
+④ Megcloud MiLai→Data Lake	パターン③：S3 Replication	原则推荐	与③-2相同
+⑤ Data Lake→各Site	现有Lambda方案需修正	不建议Lambda搬运100GB文件	Lambda只做通知／控制，文件直接从S3传输
 
-転送経路
+⸻
 
-要件・課題
+①-1 东京大楼→东京DC
 
-DCからAWS S3へ、VPN/DXを前提とせずインターネット経由で転送する。
+推荐
 
-DataSyncによる対応
+パターン①：社内専用Falcon網を経由して東京DCへ転送
 
-DataSync AgentがPublic service endpointへHTTPSでアウトバウンド接続し、AWS DataSyncへデータを送信する。
+这是当前唯一候选方案，因此可以继续采用，但它还不能算“设计完成”。
 
-設計上の扱い
+目前只能确认：
 
-採用
+東京ビルのオンプレデータ
+→ Falcon社内専用網
+→ 東京DC
 
-転送元
+Falcon网只是网络路径，不负责文件传输。必须继续确认：
 
-要件・課題
+* 东京DC的接收端是什么：文件服务器、SFTP服务器、API还是业务系统
+* SMB、SFTP、HTTPS或专用传输软件中的哪一种
+* 是东京大楼主动Push，还是东京DC主动Pull
+* 东京DC是否临时保存数据
+* 失败重试及传输完成判定
 
-DC内のファイルサーバ/NAS上に出力される連携ファイルを対象とする。
+Excel可写
 
-DataSyncによる対応
+推奨：パターン①。ただし、Falcon網はネットワーク経路のみであり、東京DC側の受信先、転送プロトコル、認証方式、実行契機については要確認。
 
-Source LocationとしてNFSまたはSMBを定義し、Agentがローカルネットワーク経由で読み取る。
+⸻
 
-設計上の扱い
+①-2 Internet：东京DC→AWS
 
-要確認（NFS/SMB）
+推荐
 
-転送先
+パターン③：AWS DataSync Agentからインターネット経由でDataSyncサービスへ接続し、S3へ転送
 
-要件・課題
+正确路径应写成：
 
-AWS側ではS3バケットへ蓄積し、後続処理・AI連携基盤から参照可能にする。
+東京DC内のNFS／SMBファイルサーバー
+→ 東京DC内DataSync Agent
+→ HTTPS／Internet
+→ AWS DataSync公共服务端点
+→ Amazon S3 Data Lake
 
-DataSyncによる対応
+注意，不是DataSync服务直接从AWS端“进入东京DC取文件”，而是：
 
-Destination LocationとしてS3バケット／Prefixを指定し、DataSyncサービスがIAM RoleをAssumeして書き込む。
+东京DC内部的DataSync Agent读取本地NFS／SMB，再主动向AWS发送。
 
-設計上の扱い
+推荐理由
 
-採用
+DataSync专门用于本地文件／对象存储与AWS存储之间的数据移动，支持NFS和SMB。它可以只传输变化的数据，并提供完整性校验、带宽限制、任务报告和CloudWatch日志，比手工上传或单纯CLI脚本更适合100GB级的定期生产传输。
 
-運用性
+三个方案比较：
 
-要件・課題
+项目	パターン① 手动	パターン② CLI	パターン③ DataSync
+100GB传输	不适合	可以	适合
+自动执行	差	需要自制脚本	支持
+差分传输	人工判断	sync可以，但需维护	支持
+完整性校验	人工	需自行设计	支持Checksum验证
+重试和监控	人工	自行开发	托管任务／日志
+初期构筑	最少	较少	需要Agent
+长期运维	高	中	低
 
-定期実行、差分転送、失敗検知、再実行、転送結果の確認が必要。
+例外
 
-DataSyncによる対応
+数据只是一次性上传，或者极低频率传输时，パターン② AWS CLI可能比部署DataSync Agent更经济。
 
-Taskにより差分転送・スケジュール実行・帯域制御・CloudWatch Logs連携・検証を設定する。
+Excel可写
 
-設計上の扱い
+推奨：パターン③（AWS DataSync）。100GB規模の定期的なデータ連携を前提とした場合、差分転送、整合性検証、再実行、帯域制御、監視をマネージド機能として利用でき、手動アップロードおよびCLIスクリプトと比較して運用負荷を低減できるため。
 
-採用
+官方文档：
 
-セキュリティ
+* What is AWS DataSync?⁠￼
+* DataSync SMB Location⁠￼
+* DataSync NFS Location⁠￼
+* DataSync数据完整性验证⁠￼
 
-要件・課題
+⸻
 
-インターネット経由でもデータ保護、AWS側アクセス制御、保管時暗号化が必要。
+①-2 VPN／Direct Connect：东京DC→AWS
 
-DataSyncによる対応
+推荐
 
-Agent〜AWS間はTLS、S3アクセスはDataSync用IAM Role、S3はSSE-S3またはSSE-KMSで暗号化する。
+パターン②：DataSync Agent＋DataSync VPC Service Endpoint
 
-設計上の扱い
+正确路径：
 
-採用
+東京DC内NFS／SMB
+→ DataSync Agent
+→ VPNまたはDirect Connect
+→ DataSync VPC Service Endpoint
+→ AWS DataSync
+→ S3 Data Lake
 
-論理構成
+DataSync支持通过AWS PrivateLink提供的VPC服务端点进行通信，这种情况下Agent与DataSync服务之间的通信保留在VPC／AWS私网路径内。
 
-DC
-↓
-ファイルサーバ/NAS
-↓
-DataSync Agent
-↓
-Internet（HTTPS 443）
-↓
-AWS DataSync Public Endpoint
-↓
-Amazon S3（Bucket/Prefix）
+为什么不推荐パターン① Lambda Pull
 
-※ AWS側からDCへ入る通信は不要。AgentがDC側からAWSへアウトバウンド送信する構成。
+Lambda不是批量文件传输服务。单次运行最长15分钟，对大文件传输而言，超时、重试、断点续传、幂等和错误恢复都需要自行实现。
 
-参考：AWS DataSync User Guide（Public service endpoint、Network requirements、S3 location、Task scheduling）
+为什么不把パターン③作为第一推荐
 
----
+パターン③：
 
-Slide 2：AWS DataSync 導入要件
+本地AWS CLI
+→ VPN／DX
+→ S3 Interface Endpoint
+→ S3
 
-導入要件
+技术上完全可行，而且S3 Interface Endpoint确实可以从本地通过VPN或DX访问。
 
-DataSyncを導入するために、DC側・AWS側・運用側で事前に満たすべき条件を整理します。
+但是它只是提供私网S3 API连接：
 
-導入に必要な構成・設定
+* 脚本调度需要自行设计
+* 重试和失败恢复需要自行设计
+* 传输结果报告需要自行设计
+* 完整性校验和告警需要自行设计
 
-Agent配置
+所以：
 
-導入要件
+* 长期、定期、100GB级：パターン② DataSync
+* 少量、简单、已有可靠批处理：パターン③ CLI＋S3 Interface Endpoint
 
-DC内にDataSync Agent VMを配置する。
+另外，不能把S3 Gateway Endpoint用于本地直连；Gateway Endpoint不接受来自本地网络、对等VPC或TGW的访问，本地接入必须使用Interface Endpoint。
 
-具体的な設定・確認内容
+Excel可写
 
-VMware / KVM / Hyper-V等にAgentイメージを導入。ファイルサーバ/NASへ到達でき、かつインターネット出口へ到達できるネットワークに配置する。
+推奨：パターン②（AWS DataSync）。オンプレミス側にDataSync Agentを配置し、VPNまたはDirect Connect経由でDataSync VPCサービスエンドポイントへ接続する。100GB規模の定期転送に必要となる差分転送、再実行、検証、監視をマネージド化できるため。
 
-備考
+官方文档：
 
-固定IPを推奨。S3やVPC内に置く構成ではない。
+* Choosing a DataSync service endpoint⁠￼
+* AWS PrivateLink for Amazon S3⁠￼
+* S3 Gateway Endpoint限制⁠￼
 
-Agentリソース
+⸻
 
-導入要件
+②-1＋②-2 稲沢→MELCO TOP→S3
 
-転送規模に応じたvCPU・メモリ・ディスクを確保する。
+推荐
 
-具体的な設定・確認内容
+パターン①：稲沢側AWS CLIからMELCO TOP Proxy経由でS3へ直接アップロード
 
-Basic：4 vCPU / 32GB RAM / 80GB Disk。
-Enhanced：8 vCPU / 32GB RAM / 80GB Disk。
-Basicで2,000万超のファイル等を扱う場合は64GB RAMを検討。
+整体路径要合并理解：
 
-備考
+稲沢オンプレデータ
+→ AWS CLI／批处理
+→ MELIT／MELCO社内网
+→ MELCO TOP Forward Proxy
+→ Internet
+→ S3公共服务端点
+→ S3 Data Lake
 
-転送対象数・データ量により最終決定。
+其中：
 
-Source接続
+* ②-1：稲沢→MELCO TOP
+* ②-2：MELCO TOP→Internet→AWS S3
+* 数据方向：稲沢侧主动Push
+* MELCO TOP：HTTP／HTTPS代理出口，不是数据保存位置
 
-導入要件
+推荐理由
 
-Agentから転送元ストレージへアクセス可能にする。
+AWS CLI官方支持通过HTTP_PROXY和HTTPS_PROXY环境变量使用代理服务器，因此和现有MELCO TOP Proxy架构的匹配度最高。
 
-具体的な設定・確認内容
+AWS CLI的aws s3 cp和aws s3 sync可以直接把本地文件上传到S3；大型对象上传会使用Multipart Upload，传输失败时只需重传失败部分。
 
-SMBの場合：TCP 445、認証ユーザー、共有名、権限。
-NFSの場合：TCP 2049、Export設定、Agent IP許可。
+示例：
 
-備考
+export HTTPS_PROXY=http://melco-top-proxy.example:8080
+aws s3 sync /data/export/ \
+  s3://data-lake-bucket/inazawa/ \
+  --only-show-errors
 
-プロトコル、パス、権限は要確認。
+不过生产上不能只写这一行命令，还要增加：
 
-AWS接続
+* 返回码判断
+* 重试次数和间隔
+* 上传完成日志
+* CloudWatch或现有监控系统告警
+* 文件上传前后的Checksum
+* 上传完成文件的移动／归档
+* 重复上传防止
+* 临时IAM凭证管理
 
-導入要件
+Excel可写
 
-AgentからAWS DataSync Public Endpointへ接続可能にする。
+推奨：パターン①（AWS CLI）。MELCO TOPがHTTP／HTTPS Proxyとして構成されており、AWS CLIはProxy設定を正式にサポートしているため、既存ネットワーク構成を変更せずS3へ直接アップロードできる。転送処理はバッチ化し、再試行、結果ログ、整合性確認を実装する。
 
-具体的な設定・確認内容
+官方文档：
 
-Agent → AWS：TCP 443（HTTPS）を許可。
-DNS名前解決、NTP同期を許可。
-Agentアクティベーション時のみ管理端末 → Agent：TCP 80を使用。
+* AWS CLI使用HTTP Proxy⁠￼
+* AWS CLI S3高级命令⁠￼
+* S3 Multipart Upload⁠￼
 
-備考
+⸻
 
-VPN/DX/VPC Endpointは不要。
+③-1 稲沢→Megcloud共享S3
 
-S3権限
+推荐
 
-導入要件
+パターン①：S3 Interface VPC Endpoint経由でMegcloud共有S3へアップロード
 
-DataSyncがS3へ書き込むためのIAM Roleを準備する。
+路径：
 
-具体的な設定・確認内容
+稲沢オンプレ
+→ 社内専用MELCO网
+→ Megcloud VPC
+→ S3 Interface VPC Endpoint
+→ Megcloud共有S3
 
-S3 LocationにDataSync用IAM Roleを指定。必要に応じてS3 Bucket Policy、KMS Key Policyを調整する。
+推荐理由
 
-備考
+这是当前唯一候选，而且符合“稲沢到Megcloud之间闭域化”的设计目标。S3 Interface Endpoint具有VPC内私有IP，并支持从本地通过VPN或Direct Connect访问。
 
-aws:SourceVpce制限がある場合は例外設定が必要。
+但这里必须追加一个设计前提：
 
-運用設定
+MELCO内网与Megcloud VPC之间必须已经存在VPN、Direct Connect或其他可路由的私网连接。
 
-導入要件
+仅创建Interface Endpoint，不会自动让稲沢本地网络连到VPC。
 
-スケジュール、帯域、ログ、検証方式を定義する。
+还要确认：
 
-具体的な設定・確認内容
+* 本地DNS如何解析S3 Endpoint
+* 是否指定--endpoint-url
+* Endpoint Security Group
+* Bucket Policy中的aws:SourceVpce
+* 路由和Firewall TCP 443
+* IAM认证和KMS权限
 
-Taskで差分転送、スケジュール、帯域制限、データ検証、CloudWatch Logs出力を設定する。
+Excel可写
 
-備考
+推奨：パターン①。稲沢オンプレミスからMegcloud VPC内のS3 Interface VPC Endpointを経由し、共有用S3へデータを格納することで、インターネットを経由しない閉域通信を実現できるため。
 
-最短スケジュール間隔は1時間。
+⸻
 
-参考：AWS DataSync User Guide（Agent requirements、Network requirements、Configuring transfers with Amazon S3、SMB/NFS location）
+③-2 Megcloud稲沢→Data Lake
 
----
+原则推荐
 
-Slide 3：AWS DataSync 制約事項・確認事項
+パターン③：Amazon S3 Replication
 
-インターネット経由でDCからS3へ転送する構成における制約、リスク、未確定事項を整理します。
+路径：
 
-制約事項
+Megcloud（稲沢）共有S3
+→ Amazon S3 Replication
+→ データ利活用基盤S3
 
-通信経路
+为什么比Lambda A／B更适合
 
-制約・注意点
+源和目标都已经是S3，因此从架构上说，优先使用S3原生复制服务比自己开发Lambda搬运程序更合理：
 
-Public Endpoint利用時はAgent〜DataSync間の通信がインターネット経由となる。
+* 不需要Lambda代码
+* 不需要自行实现重试和幂等
+* 不受Lambda 15分钟限制
+* 支持跨AWS账号复制
+* 自动复制新对象及对象更新
+* 可以保留对象元数据
 
-対応方針
+S3 Live Replication是自动、异步的S3 Bucket间复制，支持同账号和跨账号。
 
-TLS通信を前提としつつ、FWで宛先FQDN・TCP443を制御する。
+前提和缺点
 
-リアルタイム性
+* 源、目标Bucket都必须启用Versioning。
+* 默认是异步复制
+* Live Replication主要复制规则生效后的新对象；既存对象需要S3 Batch Replication。
+* 跨账号需要IAM Role、目标Bucket Policy和KMS权限。
+* 两边都会保留数据，但源Bucket可以通过Lifecycle控制保存期限
+* 对复制时间有明确SLA要求时，可评估S3 Replication Time Control。
 
-制約・注意点
+什么时候改选パターン②
 
-DataSyncはタスク実行型の転送であり、リアルタイムストリーミング用途ではない。スケジュール実行の最短間隔は1時間。
+满足以下任一条件时，可以将パターン② 基盘侧Pull作为推荐：
 
-対応方針
+* Megcloud已经把パターン②定义为标准服务
+* 不允许在Megcloud源Bucket开启Versioning
+* 必须由数据利用基盘控制具体执行时刻
+* 数据取得成功后必须立即删除源文件
+* 需要基于业务条件选择文件，而不是简单按Prefix／Tag复制
 
-準リアルタイム要件がある場合は、別方式との比較が必要。
+不过这时建议在现有表格中追加EventBridge／SQS等事件通知设计，否则“基盘侧Lambda检测跨账号S3文件”如何实现并不完整。
 
-帯域影響
+Excel可写
 
-制約・注意点
+推奨：原則パターン③（Amazon S3 Replication）。送信元・送信先がともにS3であるため、Lambdaによる独自転送処理を実装せず、S3のマネージド機能でクロスアカウント転送、再試行、継続的な同期を実現できる。実行時刻の厳密な制御または送信元削除が必要な場合はパターン②を採用する。
 
-転送量が大きい場合、DCのインターネット出口帯域やファイルサーバ負荷に影響する可能性がある。
+官方文档：
 
-対応方針
+* S3 Replication概述⁠￼
+* 跨账号S3 Replication⁠￼
+* Replication要求⁠￼
+* S3 Replication Time Control⁠￼
 
-帯域制限、実行時間帯、初回転送と差分転送の分離を設計する。
+⸻
 
-S3制限
+④ Megcloud MiLai→Data Lake
 
-制約・注意点
+推荐
 
-S3 Bucket Policyで特定VPC Endpointのみ許可している場合、DataSyncからの書き込みが拒否される可能性がある。
+与③-2相同，原則パターン③：Amazon S3 Replication
 
-対応方針
+因为其技术结构相同：
 
-DataSync用IAM Roleを許可するBucket Policy例外を設ける。
+Megcloud（MiLai）共有S3
+→ 跨账号S3 Replication
+→ データ利活用基盤S3
 
-メタデータ
+推荐依据、限制和替代条件与③-2相同。
 
-制約・注意点
+为了减少运维差异，③-2与④最好采用同一种方式，不建议稲沢用Lambda、MiLai用Replication，否则权限、监控、故障处理和成本模型会分成两套。
 
-NFS/SMBの権限・所有者・タイムスタンプ等は、S3オブジェクトのメタデータとしての扱いになるため確認が必要。
+Excel可写
 
-対応方針
+推奨：パターン③。Megcloud（稲沢）と同一方式に統一し、クロスアカウントS3 Replicationを利用することで、実装および運用方式を標準化する。
 
-PoCでファイル形式、権限、文字コード、更新判定を確認する。
+⸻
 
-費用
+⑤ Data Lake→各Site
 
-制約・注意点
+当前方案不能直接按原样推荐
 
-DataSync転送料、S3リクエスト、S3保管、KMS、CloudWatch Logs等の費用が発生する。
+表中写的是：
 
-対応方針
+S3 Data Lake
+→ Lambda
+→ NAT Gateway
+→ Internet
+→ 各Site
 
-データ量・ファイル数・実行頻度を確定後に概算する。
+如果Lambda只是：
 
-未確定・確認事項
+* 调用外部API
+* 发送文件到达通知
+* 生成URL
+* 传输少量JSON或控制信息
 
-転送元
+那么这个方案可以。
 
-確認内容
+但如果按你们当前的100GB基准，不能让Lambda作为100GB文件的数据中继。Lambda单次执行最长15分钟，而且调用负载和本地临时存储都有配额，作为大型文件传输主体会产生明显的超时、重试和断点恢复风险。
 
-サーバ名、IP、共有パス、NFS/SMB、認証方式、権限
+建议修正
 
-設計への影響
+各Site能够主动下载
 
-Location設定、FW設定
+S3 Data Lake
+→ Lambda生成Presigned URL并通知
+→ 各Site直接通过HTTPS从S3下载
 
-データ仕様
+Presigned URL可以在不修改Bucket Policy的情况下，授予对特定S3对象的限时访问权限。
 
-確認内容
+各Site要求SFTP Push
 
-ファイル形式、文字コード、命名規則、ディレクトリ構成
+S3 Data Lake
+→ AWS Transfer Family SFTP Connector
+→ 外部Site的SFTP服务器
 
-設計への影響
+AWS Transfer Family SFTP Connector专门支持从S3向外部合作方的SFTP服务器发送文件，并提供凭证、日志和托管传输功能。
 
-S3 Prefix、後続処理
+Excel可写
 
-転送規模
+現行パターン①は条件付き採用。Lambdaは連携制御、通知または署名付きURLの発行に限定し、100GB規模のファイル本体をLambda経由で中継しない。各サイトがHTTPSで取得可能な場合はS3署名付きURL、SFTPが必要な場合はAWS Transfer Family SFTP Connectorを推奨する。
 
-確認内容
+官方文档：
 
-初回データ量、日次増分、ファイル数、最大ファイルサイズ
+* Lambda Quotas⁠￼
+* S3 Presigned URL⁠￼
+* Transfer Family SFTP Connector⁠￼
 
-設計への影響
+⸻
 
-Agentリソース、帯域、費用
+可以直接向负责人提交的日文结论
 
-転送頻度
+各ネットワーク構成に対する推奨パターンを以下の通り整理しました。
 
-確認内容
+・①-1：パターン①を継続。ただし、東京DC側受信先および転送プロトコルは要確認。
+・①-2（インターネット）：パターン③ AWS DataSyncを推奨。
+・①-2（VPN／Direct Connect）：パターン② AWS DataSync＋VPCサービスエンドポイントを推奨。
+・②-1／②-2：パターン① AWS CLIによるMELCO TOP Proxy経由のS3アップロードを推奨。
+・③-1：パターン① S3 Interface VPC Endpoint経由のMegcloud共有S3格納を推奨。
+・③-2／④：原則パターン③ Amazon S3 Replicationを推奨。厳密な実行時刻制御や送信元削除が必要な場合はパターン②を採用。
+・⑤：Lambdaは制御処理のみに利用し、大容量ファイル本体は署名付きURLまたはAWS Transfer Family SFTP Connectorにより転送する構成へ見直す。
 
-日次/時間単位/手動、実行時間帯、締め時間
-
-設計への影響
-
-スケジュール、RPO
-
-エラー運用
-
-確認内容
-
-失敗時の通知先、再実行手順、リカバリ責任者
-
-設計への影響
-
-CloudWatch、運用手順
-
-S3設計
-
-確認内容
-
-Bucket、Prefix、暗号化方式、Lifecycle、Versioning、Bucket Policy
-
-設計への影響
-
-セキュリティ、保管費用
-
-運用責任
-
-確認内容
-
-Agent VMの管理者、AWS側Task管理者、障害一次切り分け
-
-設計への影響
-
-運用体制、保守範囲
-
-参考：AWS DataSync User Guide（Task scheduling、Data verification、Metadata handling、S3 request cost considerations）
+選定基準は、100GB規模のデータ転送に対する信頼性、再実行性、整合性検証、運用負荷、独自プログラムの保守範囲、およびネットワーク制約です。
