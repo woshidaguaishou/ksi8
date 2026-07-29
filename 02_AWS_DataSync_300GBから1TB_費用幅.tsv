@@ -1,0 +1,19 @@
+﻿現行データ量	初回DataSync転送料	S3 Standard保存料金／月	初月基本料金合計	継続月基本料金	計算前提	参照先
+300GB	3.75 USD	7.50 USD／月	11.25 USD	7.50 USD＋差分転送料＋変動費	DataSync Basic mode 0.0125 USD/GB、S3 Standard 0.025 USD/GB/月	https://aws.amazon.com/datasync/pricing/ / https://aws.amazon.com/s3/pricing/
+500GB	6.25 USD	12.50 USD／月	18.75 USD	12.50 USD＋差分転送料＋変動費	DataSync Basic mode 0.0125 USD/GB、S3 Standard 0.025 USD/GB/月	https://aws.amazon.com/datasync/pricing/ / https://aws.amazon.com/s3/pricing/
+750GB	9.38 USD	18.75 USD／月	28.12 USD	18.75 USD＋差分転送料＋変動費	DataSync Basic mode 0.0125 USD/GB、S3 Standard 0.025 USD/GB/月	https://aws.amazon.com/datasync/pricing/ / https://aws.amazon.com/s3/pricing/
+1TB（1,024GB）	12.80 USD	25.60 USD／月	38.40 USD	25.60 USD＋差分転送料＋変動費	DataSync Basic mode 0.0125 USD/GB、S3 Standard 0.025 USD/GB/月	https://aws.amazon.com/datasync/pricing/ / https://aws.amazon.com/s3/pricing/
+
+月間差分転送量	DataSync月額料金	計算式	備考	参照先
+10GB	0.12 USD	10GB × 0.0125 USD/GB	当月に実際に転送した追加・更新データ量のみ	https://aws.amazon.com/datasync/pricing/
+50GB	0.62 USD	50GB × 0.0125 USD/GB	当月に実際に転送した追加・更新データ量のみ	https://aws.amazon.com/datasync/pricing/
+100GB	1.25 USD	100GB × 0.0125 USD/GB	当月に実際に転送した追加・更新データ量のみ	https://aws.amazon.com/datasync/pricing/
+300GB	3.75 USD	300GB × 0.0125 USD/GB	当月に実際に転送した追加・更新データ量のみ	https://aws.amazon.com/datasync/pricing/
+500GB	6.25 USD	500GB × 0.0125 USD/GB	当月に実際に転送した追加・更新データ量のみ	https://aws.amazon.com/datasync/pricing/
+1TB（1,024GB）	12.80 USD	1024GB × 0.0125 USD/GB	当月に実際に転送した追加・更新データ量のみ	https://aws.amazon.com/datasync/pricing/
+
+注意事項	内容
+初月基本料金	初回DataSync転送料と、同容量をS3 Standardに1か月保存する料金の合計。S3リクエスト、CloudWatch Logs、KMSは含まない。
+継続月料金	S3の平均保存量に応じた料金に、当月の差分転送量に応じたDataSync料金を加算する。
+ファイル数	大量の小容量ファイルがある場合、S3 APIリクエスト数およびタスク処理時間が増加する可能性がある。
+正式見積りに必要な情報	初回全量データ量、月間差分量、ファイル数、平均ファイルサイズ、S3保存期間、Versioning有無。

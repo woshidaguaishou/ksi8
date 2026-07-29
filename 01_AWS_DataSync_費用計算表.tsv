@@ -1,0 +1,19 @@
+﻿比較項目	DataSync（インターネット経由）	算定条件・計算式	備考	参照先
+試算リージョン	Asia Pacific (Tokyo) / ap-northeast-1	-	税別概算	https://aws.amazon.com/datasync/pricing/
+想定データ量	最大1TB（1,024GB）	-	現状データ量：数百GB～1TB	-
+AWS側固定費用	0.00 USD／月	-	VPN、Direct Connect、VPC Endpointを利用しない	https://aws.amazon.com/datasync/pricing/
+AWSデータ転送料	0.00 USD	オンプレミスからAWSへの受信を想定	S3から外部へ取り出す場合は別途料金が発生し得る	https://aws.amazon.com/s3/pricing/
+DataSync初回全量転送料	12.80 USD／回	1,024GB × 0.0125 USD/GB	初回のみ全量転送を想定	https://aws.amazon.com/datasync/pricing/
+DataSync継続転送料	月間差分量 × 0.0125 USD/GB	実際に転送した追加・更新データ量で計算	全体保存量ではなく実転送量に課金	https://aws.amazon.com/datasync/pricing/
+Amazon S3 Standard保存料金	25.60 USD／月	1,024GB × 0.025 USD/GB/月	平均保存量1TBとして試算	https://aws.amazon.com/s3/pricing/
+S3リクエスト料金	変動費	PUT、LIST、HEAD、GET等の回数で計算	小容量ファイルが大量にある場合は増加	https://aws.amazon.com/s3/pricing/
+CloudWatch Logs料金	変動費	ログ取込量・保存量・保存期間で計算	ログ詳細度により変動	https://aws.amazon.com/cloudwatch/pricing/
+KMS利用料金	必要時のみ変動費	SSE-KMS利用時のAPIリクエスト等	SSE-S3の場合はKMS料金なし	https://aws.amazon.com/kms/pricing/
+DataSync Agent利用料金	0.00 USD	-	Agentソフトウェア自体の個別利用料金はなし	https://aws.amazon.com/datasync/pricing/
+Agent用仮想基盤費用	0.00 USD想定	既存仮想基盤の空きリソースを利用	新規ハードウェア・ライセンスが必要な場合は別途	https://docs.aws.amazon.com/datasync/latest/userguide/agent-requirements.html
+回線事業者費用	0.00 USD想定	既存インターネット回線を利用	回線増速が必要な場合は別途	-
+初期AWSサービス利用料金	0.00 USD	-	AWSサービス自体に初期契約料金なし	https://aws.amazon.com/datasync/pricing/
+構築・設定作業費	別途見積り	-	Agent、FW、IAM、S3、Task設定、試験、手順書作成等	-
+初月基本料金	38.40 USD＋変動費	DataSync初回1TB転送＋S3 1TB保存	S3リクエスト、ログ、KMS等を除く	-
+初月予算値	約40～50 USD	-	通常のリクエスト・ログ量を含む暫定予算	-
+継続月基本料金	25.60 USD＋差分転送料＋変動費	S3 1TB保存＋当月差分転送	S3保存量が増加する場合は月額も増加	-
