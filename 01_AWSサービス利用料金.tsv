@@ -1,0 +1,10 @@
+﻿費用区分	費用項目	初月費用	継続月費用	算定条件・計算式	備考	参照先
+AWSサービス利用料金	AWS DataSync	12.80 USD	月間差分量 × 0.0125 USD/GB	初回1TB：1,024GB × 0.0125 USD/GB	初月は全量転送、継続月は実際の追加・更新データ量に課金	https://aws.amazon.com/datasync/pricing/
+AWSサービス利用料金	Amazon S3 Standard	25.60 USD	25.60 USD以上	平均保存量1TB：1,024GB × 0.025 USD/GB・月	保存量が増加した場合は月額料金も増加	https://aws.amazon.com/s3/pricing/
+AWSサービス利用料金	AWS KMS カスタマーマネージドキー	1.00 USD	1.00 USD	KMSキー1本を想定	SSE-KMSを利用する場合。S3 Bucket Keyの有効化を推奨	https://aws.amazon.com/kms/pricing/ / https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-key.html
+AWSサービス利用料金	AWS KMS APIリクエスト	変動費	変動費	暗号化・復号リクエスト数により算定	20,000リクエスト/月の無料枠。対象APIの超過分は料金が発生	https://aws.amazon.com/kms/pricing/
+AWSサービス利用料金	Amazon S3 APIリクエスト	変動費	変動費	PUT、LIST、HEAD、GET等の回数により算定	データ容量よりファイル数の影響が大きい	https://aws.amazon.com/datasync/pricing/ / https://aws.amazon.com/s3/pricing/
+AWSサービス利用料金	Amazon CloudWatch	変動費	変動費	ログ取込量、保存期間、メトリクス、アラーム等により算定	DataSyncタスクのログ・監視・通知に利用	https://aws.amazon.com/cloudwatch/pricing/
+AWSサービス利用料金	AWSデータ転送受信	0.00 USD	0.00 USD	オンプレミスからAWSへのデータ受信	S3からインターネット等へ取り出す場合は別途料金を確認	https://aws.amazon.com/s3/pricing/
+AWSサービス利用料金	AWS側固定ネットワーク費用	0.00 USD	0.00 USD	Public Service Endpointを利用	VPN、Direct Connect、DataSync VPC Endpointを利用しない	https://aws.amazon.com/datasync/pricing/
+AWSサービス利用料金	AWS費用合計	39.40 USD＋変動費	26.60 USD＋差分転送料＋変動費	DataSync＋S3 Standard＋KMSキー	AWS Billingに計上される概算。S3/KMSリクエスト、CloudWatch等は変動費	-
