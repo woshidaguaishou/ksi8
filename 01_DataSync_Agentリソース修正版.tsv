@@ -1,0 +1,4 @@
+﻿区分	導入要件	具体的な設定・確認内容	備考	参照先
+Agentリソース	DataSync Agent用仮想マシンに必要なリソースを割り当てる。	Basic mode：4 vCPU、32GB RAM、80GB Disk。2,000万を超えるファイル、オブジェクトまたはディレクトリを処理する場合は64GB RAMを検討する。Enhanced mode：8 vCPU、32GB RAM、80GB Disk。	記載値は物理ホスト全体のスペックではなく、DataSync Agent VM 1台に割り当てるリソース要件である。物理ホスト側には当該リソースを割り当て可能な空き容量が必要。	https://docs.aws.amazon.com/datasync/latest/userguide/agent-requirements.html
+対応ハイパーバイザー	利用するタスクモードに対応した仮想化基盤を使用する。	VMware ESXi、KVM、Nutanix AHV、Microsoft Hyper-V等。Enhanced modeはVMware ESXi、KVM、Nutanix AHV、EC2をサポートする。	Microsoft Hyper-VはBasic mode Agentのみ利用可能。	https://docs.aws.amazon.com/datasync/latest/userguide/agent-requirements.html
+資料追記文	上記スペックの対象を明確化する。	※上記スペックは、DataSync Agent用に作成する仮想マシン1台あたりの割当リソースであり、親となる物理サーバー全体のスペックではない。	PPTのAgentリソース欄または表下の注記として追加する。	https://docs.aws.amazon.com/datasync/latest/userguide/agent-requirements.html

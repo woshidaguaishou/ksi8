@@ -1,0 +1,14 @@
+﻿項目	内容	300GB	500GB	750GB	1TB（1,024GB）	課金条件・備考	参照先
+試算条件	AWSリージョン	Asia Pacific (Tokyo)	Asia Pacific (Tokyo)	Asia Pacific (Tokyo)	Asia Pacific (Tokyo)	税別概算。価格改定時は再見積りする。	-
+試算条件	DataSyncタスクモード	Basic mode	Basic mode	Basic mode	Basic mode	オンプレミスNFS/SMBからS3への転送を想定。	https://aws.amazon.com/datasync/pricing/
+AWS DataSync	初回全量転送料	3.75 USD	6.25 USD	9.38 USD	12.80 USD	実際に転送したデータ量 × 0.0125 USD/GB。初期費用・最低料金なし。	https://aws.amazon.com/datasync/pricing/
+Amazon S3	S3 Standard保存料金／月	7.50 USD／月	12.50 USD／月	18.75 USD／月	25.60 USD／月	平均保存量 × 0.025 USD/GB・月として試算。	https://aws.amazon.com/s3/pricing/
+AWS KMS	カスタマーマネージドKMSキー	1.00 USD／月	1.00 USD／月	1.00 USD／月	1.00 USD／月	KMSキー1本を想定。1キーあたり1.00 USD/月。	https://aws.amazon.com/kms/pricing/
+AWS KMS	KMS APIリクエスト	変動費	変動費	変動費	変動費	月20,000リクエストの無料利用枠。一般的な対称キーAPIは超過分0.03 USD/10,000リクエスト。	https://aws.amazon.com/kms/pricing/
+Amazon S3	S3 APIリクエスト	変動費	変動費	変動費	変動費	LIST、HEAD、GET、PUT、COPY等。データ容量よりファイル数の影響が大きい。	https://aws.amazon.com/datasync/pricing/
+Amazon CloudWatch	CloudWatch Logs／Metrics／Events	変動費	変動費	変動費	変動費	ログ取込量、保存量、保持期間、メトリクス、イベント数により変動。	https://aws.amazon.com/cloudwatch/pricing/
+データ転送	インターネットからAWSへのデータ転送受信	0.00 USD	0.00 USD	0.00 USD	0.00 USD	オンプレミスからAWSへのアップロードを想定。AWSから外部へ取り出す場合は別途確認。	https://aws.amazon.com/s3/pricing/
+合計	初月主要費用合計	12.25 USD＋変動費	19.75 USD＋変動費	29.12 USD＋変動費	39.40 USD＋変動費	DataSync初回全量転送＋S3 Standard 1か月保存＋KMSキー1本。S3/KMSリクエスト、CloudWatchは含まない。	-
+合計	継続月主要費用	8.50 USD＋差分転送料＋変動費	13.50 USD＋差分転送料＋変動費	19.75 USD＋差分転送料＋変動費	26.60 USD＋差分転送料＋変動費	S3保存料金＋KMSキー料金＋当月の差分転送料。S3保存量の増加に応じて上昇する。	-
+推奨	S3 Bucket Key	有効化推奨	有効化推奨	有効化推奨	有効化推奨	SSE-KMS利用時のKMS APIリクエスト数とコストを削減するために有効化を推奨。	https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucket-key.html
+見積範囲	本試算に含まない費用	-	-	-	-	オンプレミス側Agent VM、仮想基盤、回線増速、FW設定、構築・試験、運用保守作業の費用は含まない。	-
