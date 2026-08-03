@@ -1,0 +1,221 @@
+﻿連番	セクション	原票No./ID	区分	設計対象	設計項目	設定値／内容	設計目的・根拠	配置／適用対象	Terraform管理単位	Terraform Resource／方式	テスト／確認方法	確認状況	備考	詳細内容
+1	00_利用ガイド	1	資料目的			AWS Organizationsを利用したマルチアカウント環境の詳細設計・Terraform構築パラメータを一元管理する。							基本設計から構築・テストへトレース可能な粒度を想定。	記入ルール：黄色セル相当の未確定値をプロジェクト実績値へ置換する。
+2	00_利用ガイド	2	ステータス			未着手／検討中／確定／対象外							確定前の値をそのままapplyしない。	記入ルール：各シートの「確認状況」を選択する。
+3	00_利用ガイド	3	実績値			Account ID、OU ID、Organization ID、ARN、メールアドレス等							仮値を本番設計書に残さない。	記入ルール：AWS側で生成された値は構築後に実績値として更新する。
+4	00_利用ガイド	4	Terraform管理			Root Module、State、Provider、Moduleの責任境界を記録する。							一つのStateにOrganization全体を集約しない。	記入ルール：Stateは権限境界・変更周期・障害影響範囲で分割する。
+5	00_利用ガイド	5	既存リソース			Console等で作成済みのOrganization、OU、Account、Policy							plan差分が想定内になるまでapplyしない。	記入ルール：新規作成せず、import blockまたはterraform importでStateへ取り込む。
+6	00_利用ガイド	6	SCP適用			拒否系ポリシー							Rootへの一括適用は最終段階。	記入ルール：Test Account → Sandbox/NonProd → Prodの順で段階適用する。
+7	00_利用ガイド	7	認証情報			Terraform実行認証							Backend認証情報も環境変数等で供給。	記入ルール：IAM Userの長期Access Keyをコードへ記載せず、SSO/OIDC/AssumeRoleを使用する。
+8	00_利用ガイド	8	変更管理			設計変更・コード変更・実績反映							GitのPR番号やチケット番号を備考へ記録。	記入ルール：設計書、コード、plan、承認、apply結果を同一変更番号で管理する。
+9	01_全体設計	1	Organizations		機能セット	ALL	SCP、組織連携、委任管理を利用するため。		10-organization	aws_organizations_organization.feature_set		確定		
+10	01_全体設計	2	Organizations		Organization ID	構築後記入：o-xxxxxxxxxx	Resource PolicyやS3/KMS条件に使用。		10-organization	aws_organizations_organization.id		検討中	自動生成値	
+11	01_全体設計	3	リージョン		ホームリージョン	ap-northeast-1	組織管理サービスの主リージョンを統一。		共通変数	variable.home_region		検討中	プロジェクト要件に合わせて変更	
+12	01_全体設計	4	リージョン		許可リージョン	ap-northeast-1, ap-northeast-3	利用リージョンを限定しガバナンスを単純化。		10-organization	RestrictRegions SCP		検討中	Global Serviceの除外を別途定義	
+13	01_全体設計	5	管理アカウント		用途	Organizations、Billing、組織レベル操作に限定	業務ワークロードによる侵害・変更影響を分離。		運用設計	Management Account運用ルール		確定		
+14	01_全体設計	6	アカウント構成		専用アカウント	Security Tooling／Log Archive／Network／Shared Services	責任・権限・ログ保全を分離。		10-organization	aws_organizations_account		検討中		
+15	01_全体設計	7	Terraform		State分割方針	Organization、Org Services、Account Baseline、Network、Workloadで分割	権限境界・変更周期・障害範囲を分離。		全Root Module	S3 backend key		確定		
+16	01_全体設計	8	Terraform		Providerバージョン	required_providersで制約し、.terraform.lock.hclをGit管理	予期せぬProvider更新を防止。		全Root Module	terraform.required_providers		確定	具体バージョンは検証後決定	
+17	01_全体設計	9	Terraform		実行認証	SSO/OIDCからTerraformExecutionRoleへAssumeRole	長期Access Keyを排除。		13_Terraform実行設計	provider.assume_role		検討中		
+18	01_全体設計	10	保護		誤削除防止	Organization、Account、State Bucket、KMS等にprevent_destroy	高影響リソースの誤削除を防止。		各Root Module	lifecycle.prevent_destroy		確定		
+19	01_全体設計	11	タグ		共通タグ	ManagedBy、System、Environment、Owner、CostCenter	運用・費用・責任者を識別。		Provider default_tags	provider.default_tags		検討中		
+20	01_全体設計	12	命名		命名規則	<company>-<system>-<env>-<resource>-<region>	一意性と検索性を確保。		共通Module	locals / naming module		検討中		
+21	02_OU設計	1		Security			セキュリティ・ログ関連専用アカウント					検討中		Terraform論理名：security / Parent：Root / OU ID（実績）：構築後記入 / 収容アカウント：security-tooling, log-archive / 適用SCP：Security-Baseline / 管理担当：Security Team / Terraformアドレス：aws_organizations_organizational_unit.security
+22	02_OU設計	2		Infrastructure			ネットワーク・共通基盤					検討中		Terraform論理名：infrastructure / Parent：Root / OU ID（実績）：構築後記入 / 収容アカウント：network, shared-services / 適用SCP：Infrastructure-Baseline / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.infrastructure
+23	02_OU設計	3		Workloads			業務アカウントの親OU					検討中		Terraform論理名：workloads / Parent：Root / OU ID（実績）：構築後記入 / 収容アカウント：Prod/NonProd配下 / 適用SCP：Workload-Baseline / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.workloads
+24	02_OU設計	4		Prod			本番業務アカウント					検討中		Terraform論理名：prod / Parent：Workloads / OU ID（実績）：構築後記入 / 収容アカウント：system-*-prod / 適用SCP：Prod-Strict / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.prod
+25	02_OU設計	5		NonProd			開発・検証業務アカウント					検討中		Terraform論理名：nonprod / Parent：Workloads / OU ID（実績）：構築後記入 / 収容アカウント：system-*-dev/stg / 適用SCP：NonProd-Baseline / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.nonprod
+26	02_OU設計	6		Sandbox			個人・技術検証用					検討中	費用・サービス制限を強化	Terraform論理名：sandbox / Parent：Root / OU ID（実績）：構築後記入 / 収容アカウント：sandbox-* / 適用SCP：Sandbox-Limit / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.sandbox
+27	02_OU設計	7		Quarantine			新規アカウント初期隔離					確定	Baseline完了後に移動	Terraform論理名：quarantine / Parent：Root / OU ID（実績）：構築後記入 / 収容アカウント：作成直後のアカウント / 適用SCP：Quarantine-Deny / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.quarantine
+28	02_OU設計	8		Suspended			利用停止・廃止待ち					確定		Terraform論理名：suspended / Parent：Root / OU ID（実績）：構築後記入 / 収容アカウント：停止対象アカウント / 適用SCP：DenyAll / 管理担当：Platform Team / Terraformアドレス：aws_organizations_organizational_unit.suspended
+29	03_アカウント設計	1		org-management				Root	Import/既存管理			検討中	業務リソースを配置しない	Account Key：management / Account ID（実績）：既存値を記入 / Root Email：aws-org@example.com / 種別：Management / 環境：Shared / Owner：Platform Team / Billing IAM Access：DENY / Bootstrap Role：- / prevent_destroy：true / close_on_deletion：-
+30	03_アカウント設計	2		security-tooling				Security	Terraform			検討中		Account Key：security_tooling / Account ID（実績）：構築後記入 / Root Email：aws-security@example.com / 種別：Security / 環境：Shared / Owner：Security Team / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+31	03_アカウント設計	3		log-archive				Security	Terraform			検討中		Account Key：log_archive / Account ID（実績）：構築後記入 / Root Email：aws-log@example.com / 種別：Log Archive / 環境：Shared / Owner：Security Team / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+32	03_アカウント設計	4		network				Infrastructure	Terraform			検討中		Account Key：network / Account ID（実績）：構築後記入 / Root Email：aws-network@example.com / 種別：Network / 環境：Shared / Owner：Network Team / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+33	03_アカウント設計	5		shared-services				Infrastructure	Terraform			検討中		Account Key：shared_services / Account ID（実績）：構築後記入 / Root Email：aws-shared@example.com / 種別：Shared Services / 環境：Shared / Owner：Platform Team / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+34	03_アカウント設計	6		system-a-dev				NonProd	Terraform			検討中		Account Key：system_a_dev / Account ID（実績）：構築後記入 / Root Email：aws-system-a-dev@example.com / 種別：Workload / 環境：Dev / Owner：App Team A / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+35	03_アカウント設計	7		system-a-prod				Prod	Terraform			検討中		Account Key：system_a_prod / Account ID（実績）：構築後記入 / Root Email：aws-system-a-prod@example.com / 種別：Workload / 環境：Prod / Owner：App Team A / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+36	03_アカウント設計	8		sandbox-user01				Sandbox	Terraform			検討中	月額Budget必須	Account Key：sandbox_user01 / Account ID（実績）：構築後記入 / Root Email：aws-sandbox01@example.com / 種別：Sandbox / 環境：Sandbox / Owner：User01 / Billing IAM Access：DENY / Bootstrap Role：OrganizationAccountAccessRole / prevent_destroy：true / close_on_deletion：false
+37	04_SCP設計	1		DenyLeaveOrganization			メンバーアカウントの離脱防止	Root		aws_organizations_policy + attachment	メンバー側から離脱不可	確定		Policy ID（実績）：構築後記入 / Target ID（実績）：Root ID / 主な制御Action／内容：organizations:LeaveOrganizationをDeny / 例外Principal：なし / 例外条件：なし / JSONファイル：policies/deny-leave-organization.json
+38	04_SCP設計	2		DenyAccountClosure			アカウントの無断閉鎖防止	Root		aws_organizations_policy + attachment	一般管理者による閉鎖不可	検討中		Policy ID（実績）：構築後記入 / Target ID（実績）：Root ID / 主な制御Action／内容：account:CloseAccountをDeny / 例外Principal：承認済み管理ロール / 例外条件：aws:PrincipalArn / JSONファイル：policies/deny-account-closure.json
+39	04_SCP設計	3		RestrictRegions			利用リージョン制限	Workloads		aws_organizations_policy + attachment	許可外RegionでEC2作成不可	検討中	NotAction設計をレビュー	Policy ID（実績）：構築後記入 / Target ID（実績）：OU ID / 主な制御Action／内容：許可外リージョンの操作をDeny / 例外Principal：OrganizationAdminRole / 例外条件：RequestedRegion、Global Service除外 / JSONファイル：policies/restrict-regions.json
+40	04_SCP設計	4		ProtectSecurityServices			監査・検知サービス保護	Root		aws_organizations_policy + attachment	一般管理者による無効化不可	検討中		Policy ID（実績）：構築後記入 / Target ID（実績）：Root ID / 主な制御Action／内容：CloudTrail/Config/GuardDuty/SecurityHubの停止・削除をDeny / 例外Principal：SecurityAdminRole / 例外条件：aws:PrincipalArn / JSONファイル：policies/protect-security-services.json
+41	04_SCP設計	5		DenyRootUsage			メンバーアカウントRootの常用防止	Workloads		aws_organizations_policy + attachment	Root操作時に拒否または警告	検討中	Root access集中管理との整合確認	Policy ID（実績）：構築後記入 / Target ID（実績）：OU ID / 主な制御Action／内容：Root Principalによる操作を制限 / 例外Principal：緊急復旧手順のみ / 例外条件：aws:PrincipalArn / JSONファイル：policies/deny-root-usage.json
+42	04_SCP設計	6		DenyPublicS3			S3公開設定防止	Prod		aws_organizations_policy + attachment	本番S3公開不可	検討中		Policy ID（実績）：構築後記入 / Target ID（実績）：OU ID / 主な制御Action／内容：Public Access Block解除・公開Policy設定をDeny / 例外Principal：例外申請ロール / 例外条件：ResourceTag/PrincipalArn / JSONファイル：policies/deny-public-s3.json
+43	04_SCP設計	7		DenyIAMUserCreation			長期認証情報の作成防止	Prod		aws_organizations_policy + attachment	IAM User作成不可	検討中		Policy ID（実績）：構築後記入 / Target ID（実績）：OU ID / 主な制御Action／内容：iam:CreateUser、CreateAccessKeyをDeny / 例外Principal：BreakGlassRole / 例外条件：aws:PrincipalArn / JSONファイル：policies/deny-iam-user.json
+44	04_SCP設計	8		SandboxServiceLimit			高額・高リスクサービス制限	Sandbox		aws_organizations_policy + attachment	対象サービス作成不可	検討中	Budgetと併用	Policy ID（実績）：構築後記入 / Target ID（実績）：OU ID / 主な制御Action／内容：未承認サービス／購入操作をDeny / 例外Principal：PlatformAdminRole / 例外条件：aws:PrincipalArn / JSONファイル：policies/sandbox-service-limit.json
+45	04_SCP設計	9		DenyAllSuspended			停止アカウントの全操作拒否	Suspended		aws_organizations_policy + attachment	全リソース操作不可	確定		Policy ID（実績）：構築後記入 / Target ID（実績）：OU ID / 主な制御Action／内容：Action:* をDeny / 例外Principal：復旧専用経路 / 例外条件：設計に応じて例外 / JSONファイル：policies/deny-all.json
+46	05_組織ポリシー	1	SERVICE_CONTROL_POLICY	共通SCP群		Deny中心、例外条件を明示	IAM Principalの最大権限境界を制御	Root／OU／Account		aws_organizations_policy		確定		強制／検知：強制 / 定義ファイル：policies/scp/*.json
+47	05_組織ポリシー	2	TAG_POLICY	RequiredTags		Environment/System/Owner/CostCenter/ManagedBy	タグKey、大小文字、許容値を標準化	Workloads		aws_organizations_policy		検討中	対応リソース範囲を確認	強制／検知：準拠確認・対応資源では強制 / 定義ファイル：policies/tag/required-tags.json
+48	05_組織ポリシー	3	BACKUP_POLICY	ProdBackupPolicy		日次、保持期間、クロスアカウント／リージョンコピー	本番バックアップ設定を集中管理	Prod		aws_organizations_policy		検討中	AWS Backup側設計と整合	強制／検知：強制 / 定義ファイル：policies/backup/prod-backup.json
+49	05_組織ポリシー	4	RESOURCE_CONTROL_POLICY	OrgResourceBoundary		aws:PrincipalOrgID等の条件を利用	組織内リソースが受け付ける外部アクセス範囲を制御	Root／Workloads		aws_organizations_policy		検討中	利用サービスのRCP対応を確認	強制／検知：強制 / 定義ファイル：policies/rcp/org-resource-boundary.json
+50	05_組織ポリシー	5	AI_SERVICES_OPT_OUT_POLICY	AIOptOutPolicy		法務・セキュリティ方針に応じて設定	AIサービスのコンテンツ利用設定を統一	Root		aws_organizations_policy		対象外	利用要件がある場合のみ	強制／検知：強制 / 定義ファイル：policies/ai/opt-out.json
+51	06_委任管理	1	CloudFormation StackSets							aws_organizations_delegated_administrator + aws_cloudformation_stack_set		検討中	SERVICE_MANAGEDを利用	Trusted Access：有効 / Service Principal：member.org.stacksets.cloudformation.amazonaws.com / Delegated Admin Account：shared-services / Account ID（実績）：構築後記入 / ホーム／集約Region：ap-northeast-1 / 新規アカウント自動有効化：有効 / 有効化順序：Trusted Access→委任管理→StackSet
+52	06_委任管理	2	AWS Security Hub							Security Hubサービス固有リソースを優先		検討中		Trusted Access：有効 / Service Principal：サービス別公式値を記入 / Delegated Admin Account：security-tooling / Account ID（実績）：構築後記入 / ホーム／集約Region：ap-northeast-1 / 新規アカウント自動有効化：有効 / 有効化順序：委任管理→組織設定→標準有効化
+53	06_委任管理	3	Amazon GuardDuty							GuardDutyサービス固有リソースを優先		検討中		Trusted Access：有効 / Service Principal：サービス別公式値を記入 / Delegated Admin Account：security-tooling / Account ID（実績）：構築後記入 / ホーム／集約Region：利用全Region / 新規アカウント自動有効化：有効 / 有効化順序：Detector→委任管理→組織設定
+54	06_委任管理	4	Amazon Inspector							Inspector2サービス固有リソースを優先		検討中		Trusted Access：有効 / Service Principal：サービス別公式値を記入 / Delegated Admin Account：security-tooling / Account ID（実績）：構築後記入 / ホーム／集約Region：利用全Region / 新規アカウント自動有効化：有効 / 有効化順序：委任管理→組織設定
+55	06_委任管理	5	Amazon Macie							Macieサービス固有リソースを優先		対象外	S3機密情報検知要件時	Trusted Access：要件時有効 / Service Principal：サービス別公式値を記入 / Delegated Admin Account：security-tooling / Account ID（実績）：構築後記入 / ホーム／集約Region：ap-northeast-1 / 新規アカウント自動有効化：要件に応じる / 有効化順序：委任管理→自動有効化
+56	06_委任管理	6	AWS Config							Aggregator／Organization RuleをTerraform管理		検討中		Trusted Access：有効 / Service Principal：サービス別公式値を記入 / Delegated Admin Account：security-tooling / Account ID（実績）：構築後記入 / ホーム／集約Region：利用全Region / 新規アカウント自動有効化：StackSetsでRecorder配備 / 有効化順序：Recorder→Aggregator→Rules
+57	06_委任管理	7	AWS Backup							Organizations Policy + AWS Backupリソース		検討中		Trusted Access：要件時有効 / Service Principal：backup.amazonaws.com等を公式確認 / Delegated Admin Account：shared-services / Account ID（実績）：構築後記入 / ホーム／集約Region：ap-northeast-1 / 新規アカウント自動有効化：有効 / 有効化順序：Vault→Policy→Attachment
+58	06_委任管理	8	AWS Firewall Manager							Firewall Managerサービス固有設定		対象外	AWS Config前提	Trusted Access：要件時有効 / Service Principal：サービス別公式値を記入 / Delegated Admin Account：security-tooling / Account ID（実績）：構築後記入 / ホーム／集約Region：ap-northeast-1 / 新規アカウント自動有効化：有効 / 有効化順序：Config→委任管理→Policy
+59	07_IdentityCenter	1		OrganizationAdmin			Organizations管理	Management				検討中	少人数に限定	Session Duration：1h / AWS Managed Policy：AdministratorAccess相当を精査 / Customer Managed Policy：OrgAdminPolicy / Inline Policy：必要最小限の組織管理Action / Permissions Boundary：OrgAdminBoundary / 割当Group：Platform-Admin / MFA：必須 / CLI利用：可
+60	07_IdentityCenter	2		SecurityAdmin			安全サービス管理	Security OU				検討中		Session Duration：4h / AWS Managed Policy：SecurityAudit + 必要な管理権限 / Customer Managed Policy：SecurityAdminPolicy / Inline Policy：サービス固有管理権限 / Permissions Boundary：SecurityBoundary / 割当Group：Security-Team / MFA：必須 / CLI利用：可
+61	07_IdentityCenter	3		NetworkAdmin			ネットワーク管理	Network Account				検討中		Session Duration：4h / AWS Managed Policy：ReadOnlyAccess + 変更権限 / Customer Managed Policy：NetworkAdminPolicy / Inline Policy：VPC/TGW/RAM/Route53権限 / Permissions Boundary：NetworkBoundary / 割当Group：Network-Team / MFA：必須 / CLI利用：可
+62	07_IdentityCenter	4		WorkloadAdmin			業務アカウント管理	各担当Account				検討中		Session Duration：4h / AWS Managed Policy：PowerUserAccess等を精査 / Customer Managed Policy：WorkloadAdminPolicy / Inline Policy：IAM管理を分離 / Permissions Boundary：WorkloadBoundary / 割当Group：App-Team-* / MFA：必須 / CLI利用：可
+63	07_IdentityCenter	5		ReadOnly			監査・参照	全Account				確定		Session Duration：8h / AWS Managed Policy：ReadOnlyAccess / Customer Managed Policy：- / Inline Policy：- / Permissions Boundary：- / 割当Group：Auditor / MFA：必須 / CLI利用：可
+64	07_IdentityCenter	6		BillingReadOnly			費用参照	Management				検討中		Session Duration：8h / AWS Managed Policy：Billing / Customer Managed Policy：BillingReadOnlyPolicy / Inline Policy：- / Permissions Boundary：- / 割当Group：Finance / MFA：必須 / CLI利用：不可／要件時
+65	07_IdentityCenter	7		IncidentResponse			インシデント調査・封じ込め	全Account				検討中	利用時アラート	Session Duration：1h / AWS Managed Policy：SecurityIncidentResponse相当 / Customer Managed Policy：IncidentResponsePolicy / Inline Policy：対象Actionを限定 / Permissions Boundary：IRBoundary / 割当Group：CSIRT / MFA：必須 / CLI利用：可
+66	07_IdentityCenter	8		BreakGlass			緊急復旧	必要Account				検討中	通常時は無効化または厳格保管	Session Duration：1h / AWS Managed Policy：AdministratorAccess相当 / Customer Managed Policy：BreakGlassPolicy / Inline Policy：緊急時のみ / Permissions Boundary：BreakGlassBoundary / 割当Group：指定個人 / MFA：強固なMFA / CLI利用：限定
+67	08_CloudTrail	1	Trail		Trail Name	org-cloudtrail-main		Management		aws_cloudtrail.name	Console/APIでOrganization Trail確認	検討中		Region：ap-northeast-1 / 依存関係：Log Bucket/KMS
+68	08_CloudTrail	2	Trail		is_organization_trail	true		Management		aws_cloudtrail.is_organization_trail	全メンバーAccountが対象	確定		Region：ap-northeast-1 / 依存関係：Organizations All Features
+69	08_CloudTrail	3	Trail		is_multi_region_trail	true		Management		aws_cloudtrail.is_multi_region_trail	複数Regionイベントを確認	確定		Region：ap-northeast-1 / 依存関係：-
+70	08_CloudTrail	4	Trail		include_global_service_events	true		Management		aws_cloudtrail.include_global_service_events	IAM等のイベントを確認	確定		Region：ap-northeast-1 / 依存関係：-
+71	08_CloudTrail	5	イベント		Management Events	Read/Write		Management		event_selector	管理イベントがS3へ出力	検討中		Region：全Region / 依存関係：-
+72	08_CloudTrail	6	イベント		Data Events	S3/Lambda等、要件対象のみ		Management		advanced_event_selector	対象イベントの出力確認	検討中	過剰取得に注意	Region：全Region / 依存関係：費用見積
+73	08_CloudTrail	7	整合性		enable_log_file_validation	true		Management		aws_cloudtrail.enable_log_file_validation	Digestファイル確認	確定		Region：ap-northeast-1 / 依存関係：-
+74	08_CloudTrail	8	出力		S3 Bucket	company-org-cloudtrail-logs		Log Archive		aws_s3_bucket	ログオブジェクト作成確認	検討中		Region：ap-northeast-1 / 依存関係：Bucket Policy
+75	08_CloudTrail	9	出力		S3 Prefix	AWSLogs/<OrganizationId>/		Log Archive		s3_key_prefix	Prefix配下を確認	検討中		Region：ap-northeast-1 / 依存関係：Organization ID
+76	08_CloudTrail	10	暗号化		KMS Key	alias/org-cloudtrail-logs		Log Archive		aws_kms_key / kms_key_id	暗号化ヘッダー確認	検討中		Region：ap-northeast-1 / 依存関係：Key Policy
+77	08_CloudTrail	11	連携		CloudWatch Logs	要件に応じて有効		Security Tooling		cloud_watch_logs_group_arn	Log Groupへの出力確認	対象外		Region：ap-northeast-1 / 依存関係：IAM Role
+78	08_CloudTrail	12	保管		Lifecycle	Standard→Glacier系→要件年数後削除		Log Archive		aws_s3_bucket_lifecycle_configuration	Storage Class移行確認	検討中		Region：ap-northeast-1 / 依存関係：監査要件
+79	08_CloudTrail	13	保護		Object Lock	監査要件に応じて有効		Log Archive		object_lock_enabled	Retention確認	対象外		Region：ap-northeast-1 / 依存関係：Bucket作成時決定
+80	08_CloudTrail	14	監視		Trail停止・削除検知	EventBridge→SNS/チケット		Security Tooling		aws_cloudwatch_event_rule	テストイベント通知	検討中		Region：ap-northeast-1 / 依存関係：CloudTrail Event
+81	09_Config	1	Recorder		Configuration Recorder	全対象Account・Regionで有効		Root/対象OU		StackSetsでaws_config_configuration_recorder	Recorder status確認	検討中		Region：利用全Region
+82	09_Config	2	Recorder		Recording Group	all_supported=true		全対応Resource		recording_group	記録リソース確認	検討中		Region：利用全Region
+83	09_Config	3	Recorder		Global Resource Types	ホームRegionのみtrueを検討		IAM等		include_global_resource_types	重複記録有無確認	検討中		Region：指定Region
+84	09_Config	4	Delivery		Delivery Channel	中央S3またはAccount内S3		全対象Account		aws_config_delivery_channel	Snapshot出力確認	検討中	集約方式を基本設計と整合	Region：利用全Region
+85	09_Config	5	Delivery		Snapshot Frequency	24Hours		全対象Account		snapshot_delivery_properties	Snapshot作成確認	検討中		Region：利用全Region
+86	09_Config	6	Aggregator		Organization Aggregator	全Account・全利用Region		Organization		aws_config_configuration_aggregator	集約画面で全Account確認	検討中		Region：ap-northeast-1
+87	09_Config	7	Rules		Organization Rules	必須Controlを定義		OU/全Account		aws_config_organization_managed_rule等	Compliance結果確認	検討中		Region：利用全Region
+88	09_Config	8	Rules		Conformance Pack	セキュリティ基準に応じて適用		Prod/Workloads		Organization Conformance Pack	展開状況確認	対象外		Region：利用全Region
+89	09_Config	9	通知		SNS/EventBridge	Noncompliant変更を通知		High/Critical Control		aws_cloudwatch_event_rule	通知確認	検討中		Region：ap-northeast-1
+90	09_Config	10	保管		Retention	監査要件に応じて設定		全対象Account		aws_config_retention_configuration	Retention設定確認	検討中		Region：ap-northeast-1
+91	10_SecurityServices	1	Security Hub			有効化するSecurity Standardと無効Controlを一覧化						検討中		Delegated Admin：security-tooling / 対象Region：集約Region + Linked Region / 新規Account自動有効化：有効 / 集約・出力先：Security Tooling／EventBridge / 例外／抑制：無効Controlの理由を記録 / Terraform管理方式：サービス固有Organization設定リソース
+92	10_SecurityServices	2	GuardDuty			S3/EKS/Runtime/Malware/RDS/Lambda Protectionを要件選択						検討中		Delegated Admin：security-tooling / 対象Region：利用全Region / 新規Account自動有効化：有効 / 集約・出力先：Security Tooling／S3 Export / 例外／抑制：Suppression Rule、Trusted IP / Terraform管理方式：Detector + Organization Configuration
+93	10_SecurityServices	3	Inspector			EC2/ECR/Lambda/Lambda Code Scanningを要件選択						検討中		Delegated Admin：security-tooling / 対象Region：利用全Region / 新規Account自動有効化：有効 / 集約・出力先：Security Tooling/EventBridge / 例外／抑制：対象外Account・Resource / Terraform管理方式：Inspector2 Organization設定
+94	10_SecurityServices	4	Macie			S3機密データ検出Job						対象外	機密情報検知要件時	Delegated Admin：security-tooling / 対象Region：対象Region / 新規Account自動有効化：要件に応じる / 集約・出力先：Security Tooling / 例外／抑制：対象Bucket・除外条件 / Terraform管理方式：Macie Organization設定
+95	10_SecurityServices	5	Detective			Behavior Graph						対象外		Delegated Admin：security-tooling / 対象Region：対応Region / 新規Account自動有効化：要件に応じる / 集約・出力先：Security Tooling / 例外／抑制：メンバー招待／自動加入 / Terraform管理方式：サービス固有設定
+96	10_SecurityServices	6	IAM Access Analyzer			Organization Zone of Trust						検討中		Delegated Admin：security-toolingまたは各Account / 対象Region：利用Region / 新規Account自動有効化：新規Account baselineで作成 / 集約・出力先：Security Tooling/EventBridge / 例外／抑制：Archive Rule / Terraform管理方式：aws_accessanalyzer_analyzer
+97	10_SecurityServices	7	Firewall Manager			WAF/Shield/Network Firewall/Security Group Policy						対象外	Config前提	Delegated Admin：security-tooling / 対象Region：対象Region / 新規Account自動有効化：有効 / 集約・出力先：Security Tooling / 例外／抑制：対象OU・除外Resource / Terraform管理方式：サービス固有Policy
+98	11_LogS3_KMS	1			Bucket名	company-org-cloudtrail-logs		Log Archive		aws_s3_bucket		検討中		リソース種別：S3 Bucket / 論理名：org-cloudtrail-logs / Region：ap-northeast-1 / Policy要件：Organization Trail書込許可
+99	11_LogS3_KMS	2			Versioning	Enabled		Log Archive		aws_s3_bucket_versioning		確定		リソース種別：S3 Bucket / 論理名：org-cloudtrail-logs / Region：ap-northeast-1 / Policy要件：誤削除・上書き復旧
+100	11_LogS3_KMS	3			Public Access Block	全項目true		Log Archive		aws_s3_bucket_public_access_block		確定		リソース種別：S3 Bucket / 論理名：org-cloudtrail-logs / Region：ap-northeast-1 / Policy要件：公開拒否
+101	11_LogS3_KMS	4			書込Principal	cloudtrail.amazonaws.com		Log Archive		aws_s3_bucket_policy		検討中		リソース種別：S3 Policy / 論理名：cloudtrail-bucket-policy / Region：ap-northeast-1 / Policy要件：SourceArn/OrgID/ACL条件
+102	11_LogS3_KMS	5			TLS強制	aws:SecureTransport=falseをDeny		Log Archive		aws_s3_bucket_policy		確定		リソース種別：S3 Policy / 論理名：deny-insecure-transport / Region：ap-northeast-1 / Policy要件：全Principal
+103	11_LogS3_KMS	6			移行・削除	監査要件に合わせて定義		Log Archive		aws_s3_bucket_lifecycle_configuration		検討中		リソース種別：S3 Lifecycle / 論理名：cloudtrail-lifecycle / Region：ap-northeast-1 / Policy要件：保管期間遵守
+104	11_LogS3_KMS	7			Alias	alias/org-cloudtrail-logs		Log Archive		aws_kms_key + aws_kms_alias		検討中		リソース種別：KMS Key / 論理名：org-cloudtrail-key / Region：ap-northeast-1 / Policy要件：Key Admin/Key Userを分離
+105	11_LogS3_KMS	8			Rotation	enable_key_rotation=true		Log Archive		aws_kms_key		確定		リソース種別：KMS Key / 論理名：org-cloudtrail-key / Region：ap-northeast-1 / Policy要件：暗号鍵ローテーション
+106	11_LogS3_KMS	9			Encrypt許可	CloudTrailサービスに限定		Log Archive		aws_kms_key.policy		検討中		リソース種別：KMS Policy / 論理名：cloudtrail-key-policy / Region：ap-northeast-1 / Policy要件：Encryption Context/SourceArn条件
+107	11_LogS3_KMS	10			Decrypt許可	SecurityAuditRole等に限定		Log Archive		aws_kms_key.policy		検討中		リソース種別：KMS Policy / 論理名：security-read / Region：ap-northeast-1 / Policy要件：ログ参照申請に基づく
+108	11_LogS3_KMS	11			SCP/Resource Policy	一般管理者による削除を拒否		Log Archive		SCP + Bucket Policy		検討中		リソース種別：保護 / 論理名：ログ削除防止 / Region：全Region / Policy要件：BreakGlassを除外
+109	12_TerraformBackend	1			State Bucket	company-terraform-state-<management-account-id>	Stateを中央管理			aws_s3_bucket / backend.s3.bucket		検討中		セキュリティ制御：専用管理Account・最小権限
+110	12_TerraformBackend	2			State Key	<layer>/<system>/<env>/terraform.tfstate	State境界を明確化			backend.s3.key		確定		セキュリティ制御：Root Moduleごとに分離
+111	12_TerraformBackend	3			State Region	ap-northeast-1	管理Region統一			backend.s3.region		検討中		セキュリティ制御：許可Region内
+112	12_TerraformBackend	4			State Lock	use_lockfile=true	同時更新を防止			backend.s3.use_lockfile		確定		セキュリティ制御：Lock解除権限を限定
+113	12_TerraformBackend	5			Versioning	Enabled	State復旧			aws_s3_bucket_versioning		確定		セキュリティ制御：MFA Delete/Object Lockは要件検討
+114	12_TerraformBackend	6			暗号化	SSE-KMS	State内の機微情報保護			aws_s3_bucket_server_side_encryption_configuration		確定		セキュリティ制御：専用KMS Key
+115	12_TerraformBackend	7			KMS Rotation	Enabled	鍵管理標準			aws_kms_key.enable_key_rotation		確定		セキュリティ制御：Key Admin/利用者分離
+116	12_TerraformBackend	8			Public Access	全Block=true	外部公開防止			aws_s3_bucket_public_access_block		確定		セキュリティ制御：Bucket PolicyでもDeny
+117	12_TerraformBackend	9			State Access	CI Roleは対象PrefixのみRead/Write	横断的State閲覧を防止			aws_iam_policy		検討中		セキュリティ制御：IAM PolicyをRoot Module単位化
+118	12_TerraformBackend	10			認証情報	SSO/OIDC/AssumeRole	長期Key排除			AWS_PROFILE/環境変数		確定		セキュリティ制御：Secretをbackend設定へ直書きしない
+119	12_TerraformBackend	11			Plan保管	CI Artifactとして承認期間中保管	承認内容とapply内容を一致			terraform plan -out		検討中		セキュリティ制御：アクセス・保存期間を制限
+120	12_TerraformBackend	12			State復旧	S3 Versionから復元するRunbook	破損・誤更新への備え			運用手順		検討中		セキュリティ制御：復旧操作を承認制
+121	13_Terraform実行設計	1		State S3/KMS					ローカルState→構築後固定			確定	Remote backend自身とは別State	実行Account：Management/State Account / Provider Alias／Role：実行者直接またはBootstrap Role / 主な管理Resource：S3/KMS/IAM / 入力値の受渡し：手動tfvars / 実行契機：初回のみ / 承認：2名承認 / 依存Module：なし / Owner：Platform Team
+122	13_Terraform実行設計	2		Organization/OU/Account/SCP					organizations/terraform.tfstate			確定		実行Account：Management / Provider Alias／Role：default provider / 主な管理Resource：aws_organizations_* / 入力値の受渡し：tfvars/locals / 実行契機：組織変更 / 承認：2名承認 / 依存Module：00-bootstrap / Owner：Platform Team
+123	13_Terraform実行設計	3		Trusted Access/Delegated Admin					org-services/terraform.tfstate			検討中		実行Account：Management + 委任Account / Provider Alias／Role：provider aliases + AssumeRole / 主な管理Resource：delegated admin/サービス組織設定 / 入力値の受渡し：10-organization outputを変数化 / 実行契機：サービス追加・変更 / 承認：Security/Platform承認 / 依存Module：10-organization / Owner：Platform/Security
+124	13_Terraform実行設計	4		全メンバーAccount共通設定					account-baseline/<account-id>.tfstate またはStackSets			検討中	大量AccountはMatrix/StackSets	実行Account：Shared Services / Provider Alias／Role：TerraformExecutionRole / 主な管理Resource：IAM/Config/EventBridge/Budget / 入力値の受渡し：Account ID/OU ID / 実行契機：Account作成・baseline変更 / 承認：Platform承認 / 依存Module：10/20 / Owner：Platform Team
+125	13_Terraform実行設計	5		Network Account					network/terraform.tfstate			検討中		実行Account：Network / Provider Alias／Role：aws.network / 主な管理Resource：TGW/RAM/DNS/Firewall / 入力値の受渡し：Account ID/OU ID/CIDR / 実行契機：ネットワーク変更 / 承認：Network承認 / 依存Module：30-baseline / Owner：Network Team
+126	13_Terraform実行設計	6		各業務Account					workloads/<system>/<env>/terraform.tfstate			検討中		実行Account：各Workload / Provider Alias／Role：aws.workload / 主な管理Resource：VPC/ECS/RDS等 / 入力値の受渡し：共有Network出力を変数化 / 実行契機：アプリ基盤変更 / 承認：App+Platform承認 / 依存Module：30/40 / Owner：App Team
+127	14_StackSets	1		org-account-baseline				Prod/NonProd/Sandbox OU		aws_cloudformation_stack_set + aws_cloudformation_stack_instances		検討中	新規Account自動展開	管理Account：shared-services / Permission Model：SERVICE_MANAGED / call_as：DELEGATED_ADMIN / 対象Region：ap-northeast-1, ap-northeast-3 / Auto Deployment：enabled / Removal時の扱い：retain_stacks_on_account_removal=false / Capabilities：CAPABILITY_NAMED_IAM / Failure Tolerance：0 / Concurrency：2または小割合 / Template Path：templates/account-baseline.yaml
+128	14_StackSets	2		org-config-baseline				対象全OU		aws_cloudformation_stack_set + instances		検討中		管理Account：shared-services / Permission Model：SERVICE_MANAGED / call_as：DELEGATED_ADMIN / 対象Region：利用全Region / Auto Deployment：enabled / Removal時の扱い：要件に応じてretain / Capabilities：CAPABILITY_NAMED_IAM / Failure Tolerance：0 / Concurrency：段階展開 / Template Path：templates/config-baseline.yaml
+129	14_StackSets	3		org-monitoring-baseline				対象全OU		aws_cloudformation_stack_set + instances		検討中		管理Account：shared-services / Permission Model：SERVICE_MANAGED / call_as：DELEGATED_ADMIN / 対象Region：ap-northeast-1 / Auto Deployment：enabled / Removal時の扱い：retain=false / Capabilities：CAPABILITY_NAMED_IAM / Failure Tolerance：0 / Concurrency：段階展開 / Template Path：templates/monitoring-baseline.yaml
+130	15_ライフサイクル	1	申請		Account利用申請						必須項目・承認完了	検討中		入力／条件：システム、環境、Owner、CostCenter、データ区分 / 担当：申請者/Platform / Terraform／Tool：申請票 / ロールバック／例外処理：差戻し
+131	15_ライフサイクル	2	承認		セキュリティ・費用承認						承認記録あり	検討中		入力／条件：申請票 / 担当：Security/Finance/Platform / Terraform／Tool：チケット / ロールバック／例外処理：申請取消
+132	15_ライフサイクル	3	作成		Organizations Account作成						Account ID取得	検討中		入力／条件：一意なRoot Email / 担当：Platform / Terraform／Tool：10-organization / ロールバック／例外処理：作成失敗を再試行
+133	15_ライフサイクル	4	隔離		Quarantine OUへ配置						未初期化操作不可	確定		入力／条件：Account作成完了 / 担当：Platform / Terraform／Tool：10-organization / ロールバック／例外処理：管理Roleで復旧
+134	15_ライフサイクル	5	Bootstrap		TerraformExecutionRole作成						AssumeRole成功	検討中		入力／条件：OrganizationAccountAccessRole利用 / 担当：Platform / Terraform／Tool：手動/Bootstrap Stack / ロールバック／例外処理：Bootstrap Roleで再実行
+135	15_ライフサイクル	6	Baseline		共通リソース配備						全Stack成功	検討中		入力／条件：実行Role利用可能 / 担当：Platform / Terraform／Tool：30-baseline/StackSets / ロールバック／例外処理：失敗Stack修復
+136	15_ライフサイクル	7	安全連携		Securityサービス加入						管理AccountでMember確認	検討中		入力／条件：Baseline完了 / 担当：Security / Terraform／Tool：20-org-services / ロールバック／例外処理：再登録
+137	15_ライフサイクル	8	アクセス		Identity Center割当						対象Userがログイン可能	検討中		入力／条件：Owner/Group確定 / 担当：Platform/Security / Terraform／Tool：Identity Center IaC/運用 / ロールバック／例外処理：割当取消
+138	15_ライフサイクル	9	費用		Budget・タグ設定						通知テスト完了	検討中		入力／条件：CostCenter/予算額 / 担当：Finance/Platform / Terraform／Tool：Terraform / ロールバック／例外処理：閾値再設定
+139	15_ライフサイクル	10	受入		受入テスト						全必須試験Pass	検討中		入力／条件：全Baseline完了 / 担当：Platform/Security/App / Terraform／Tool：18_テスト / ロールバック／例外処理：不備修正
+140	15_ライフサイクル	11	本配置		目的OUへ移動						有効SCPが設計通り	検討中		入力／条件：受入完了 / 担当：Platform / Terraform／Tool：10-organization / ロールバック／例外処理：Quarantineへ戻す
+141	15_ライフサイクル	12	停止		Suspended OUへ移動						操作不可・ログ保持	検討中		入力／条件：停止承認 / 担当：Platform / Terraform／Tool：10-organization / ロールバック／例外処理：承認後復旧
+142	15_ライフサイクル	13	閉鎖		Account閉鎖						閉鎖記録・保管完了	検討中	Terraform destroyで安易に実施しない	入力／条件：法務/費用/データ保管確認 / 担当：Platform/Finance/Security / Terraform／Tool：運用手順 / ロールバック／例外処理：期間内復旧手順
+143	16_監視運用	1		CreateAccount								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge Organizations API Event / Severity：Medium / 通知先：Platform SNS/チケット / 一次対応者：Platform Team / 目標対応時間：営業時間内 / 自動処置：なし / Runbook：RB-ORG-001
+144	16_監視運用	2		CloseAccount								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Platform/Security/Finance / 一次対応者：Platform Team / 目標対応時間：即時 / 自動処置：なし / Runbook：RB-ORG-002
+145	16_監視運用	3		MoveAccount								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：High / 通知先：Platform/Security / 一次対応者：Platform Team / 目標対応時間：15分以内 / 自動処置：要件に応じQuarantineへ戻す / Runbook：RB-ORG-003
+146	16_監視運用	4		AttachPolicy/DetachPolicy								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Platform/Security / 一次対応者：Security Team / 目標対応時間：即時 / 自動処置：承認外変更の復旧を検討 / Runbook：RB-ORG-004
+147	16_監視運用	5		UpdatePolicy								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Platform/Security / 一次対応者：Security Team / 目標対応時間：即時 / 自動処置：Git定義との差分検知 / Runbook：RB-ORG-005
+148	16_監視運用	6		Enable/DisableAWSServiceAccess								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：High / 通知先：Platform/Security / 一次対応者：Platform Team / 目標対応時間：15分以内 / 自動処置：なし / Runbook：RB-ORG-006
+149	16_監視運用	7		Register/DeregisterDelegatedAdministrator								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Platform/Security / 一次対応者：Platform Team / 目標対応時間：即時 / 自動処置：なし / Runbook：RB-ORG-007
+150	16_監視運用	8		Root Login								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Security/CSIRT / 一次対応者：Security Team / 目標対応時間：即時 / 自動処置：Session確認・Credentialローテーション / Runbook：RB-IAM-001
+151	16_監視運用	9		CloudTrail Stop/Delete								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Security/CSIRT / 一次対応者：Security Team / 目標対応時間：即時 / 自動処置：SCPで原則拒否 / Runbook：RB-LOG-001
+152	16_監視運用	10		Config Recorder Stop								検討中		イベントソース：CloudTrail/Config / 検知方式／Rule：EventBridge / Severity：High / 通知先：Security / 一次対応者：Security Team / 目標対応時間：15分以内 / 自動処置：再有効化を検討 / Runbook：RB-CFG-001
+153	16_監視運用	11		Security Service Disable								検討中		イベントソース：CloudTrail / 検知方式／Rule：EventBridge / Severity：Critical / 通知先：Security/CSIRT / 一次対応者：Security Team / 目標対応時間：即時 / 自動処置：SCP/自動復旧を検討 / Runbook：RB-SEC-001
+154	16_監視運用	12		Terraform State Lock異常								検討中		イベントソース：CI/Terraform / 検知方式／Rule：Pipeline Failure / Severity：High / 通知先：Platform / 一次対応者：Platform Team / 目標対応時間：30分以内 / 自動処置：自動force-unlockは禁止 / Runbook：RB-TF-001
+155	17_構築手順	1	Bootstrap		State用S3/KMS作成	Bucket/Key作成					Bucket/Key作成	未着手		Root Module／手段：00-bootstrap / 前提条件：管理Accountへの管理権限 / 実行Account：Management/State / コマンド／操作：terraform init/plan/apply / ロールバック：ローカルStateから復旧
+156	17_構築手順	2	Backend		Remote backend設定	Remote State利用開始					Remote State利用開始	未着手		Root Module／手段：各Root Module / 前提条件：Step1完了 / 実行Account：各実行Account / コマンド／操作：terraform init -migrate-state / ロールバック：Versionから復旧
+157	17_構築手順	3	Organizations		OrganizationをImport/作成しAll Features確認	Organization ID取得					Organization ID取得	未着手		Root Module／手段：10-organization / 前提条件：Management権限 / 実行Account：Management / コマンド／操作：terraform plan/apply / ロールバック：State修正/import
+158	17_構築手順	4	OU		OU階層作成	OU ID取得					OU ID取得	未着手		Root Module／手段：10-organization / 前提条件：Step3完了 / 実行Account：Management / コマンド／操作：terraform apply / ロールバック：対象OUのみ削除/修正
+159	17_構築手順	5	Account		基盤Account作成	Account ID取得					Account ID取得	未着手		Root Module／手段：10-organization / 前提条件：Root Email確定 / 実行Account：Management / コマンド／操作：terraform apply / ロールバック：作成処理再確認
+160	17_構築手順	6	Identity		Identity Center初期設定	管理者ログイン可能					管理者ログイン可能	未着手		Root Module／手段：運用/IaC / 前提条件：管理者確定 / 実行Account：Management / コマンド／操作：Console/IaC / ロールバック：割当取消
+161	17_構築手順	7	Root保護		Root MFA・集中管理・緊急経路整備	Root常用不可					Root常用不可	未着手		Root Module／手段：運用/IaC / 前提条件：連絡先確定 / 実行Account：各Account / コマンド／操作：Console/API / ロールバック：BreakGlass手順
+162	17_構築手順	8	Trusted Access		必要サービス連携を有効化	Service Access有効					Service Access有効	未着手		Root Module／手段：20-org-services / 前提条件：Step3-5完了 / 実行Account：Management / コマンド／操作：terraform apply/サービスAPI / ロールバック：無効化影響確認後戻す
+163	17_構築手順	9	Delegated Admin		委任管理Account登録	委任Account表示					委任Account表示	未着手		Root Module／手段：20-org-services / 前提条件：Trusted Access有効 / 実行Account：Management / コマンド／操作：terraform apply / ロールバック：deregister
+164	17_構築手順	10	Logging		S3/KMS/Organization Trail作成	全Accountログ集約					全Accountログ集約	未着手		Root Module／手段：20-org-services/Log Archive / 前提条件：Log Archive利用可能 / 実行Account：Management/Log Archive / コマンド／操作：terraform apply / ロールバック：Trail停止せず設定修正
+165	17_構築手順	11	Config		Recorder/Aggregator/Rules展開	全Account記録・集約					全Account記録・集約	未着手		Root Module／手段：StackSets/20-org-services / 前提条件：StackSets準備 / 実行Account：Shared/Security / コマンド／操作：terraform apply / ロールバック：StackSet修復
+166	17_構築手順	12	Security		Security Hub/GuardDuty/Inspector有効化	全Account Member化					全Account Member化	未着手		Root Module／手段：20-org-services / 前提条件：委任管理完了 / 実行Account：Security Tooling / コマンド／操作：terraform apply / ロールバック：Member再登録
+167	17_構築手順	13	Baseline		IAM/監視/Budget等配備	全Stack成功					全Stack成功	未着手		Root Module／手段：30-account-baseline / 前提条件：実行Role準備 / 実行Account：各Account / コマンド／操作：CI Matrix/StackSets / ロールバック：失敗Resource修復
+168	17_構築手順	14	SCP Test		Test AccountへSCP適用	想定拒否のみ発生					想定拒否のみ発生	未着手		Root Module／手段：10-organization / 前提条件：BreakGlass確認 / 実行Account：Management / コマンド／操作：terraform apply / ロールバック：Policy detach
+169	17_構築手順	15	SCP展開		Sandbox→NonProd→Prodへ段階適用	業務影響なし					業務影響なし	未着手		Root Module／手段：10-organization / 前提条件：Step14 Pass / 実行Account：Management / コマンド／操作：段階apply / ロールバック：直前Attachmentへ戻す
+170	17_構築手順	16	Network		共有Network/RAM等作成	共有・経路正常					共有・経路正常	未着手		Root Module／手段：40-network / 前提条件：Network Account準備 / 実行Account：Network / コマンド／操作：terraform apply / ロールバック：Route/RAM復旧
+171	17_構築手順	17	受入		総合テスト実施	必須試験Pass					必須試験Pass	未着手		Root Module／手段：18_テスト / 前提条件：全構築完了 / 実行Account：各担当 / コマンド／操作：試験手順 / ロールバック：不具合修正
+172	17_構築手順	18	実績反映		ID/ARN/Version/差分を更新	設計と実環境一致					設計と実環境一致	未着手		Root Module／手段：設計書/Git / 前提条件：Step17完了 / 実行Account：Platform / コマンド／操作：PR/レビュー / ロールバック：差分修正
+173	18_テスト	ORG-N-001	Organizations	OU/Account	OU・Account一覧を取得	設計書と名称・所属が一致					設計書と名称・所属が一致	未着手		前提条件：Organization構築済み / 正常／異常：正常 / 優先度：High / 担当：Platform
+174	18_テスト	ORG-A-001	SCP	DenyLeaveOrganization	LeaveOrganizationを実行	AccessDenied					AccessDenied	未着手		前提条件：Test Account所属 / 正常／異常：異常 / 優先度：Critical / 担当：Platform
+175	18_テスト	ORG-A-002	SCP	RestrictRegions	許可外RegionでEC2作成	AccessDenied					AccessDenied	未着手		前提条件：SCP適用済み / 正常／異常：異常 / 優先度：Critical / 担当：Platform
+176	18_テスト	ORG-A-003	SCP	Global Service例外	IAM/Organizations必要操作を実施	設計上必要な操作は成功					設計上必要な操作は成功	未着手		前提条件：RestrictRegions適用済み / 正常／異常：正常 / 優先度：Critical / 担当：Platform
+177	18_テスト	IAM-N-001	Identity Center	ReadOnly	対象Accountへログインし参照	参照成功					参照成功	未着手		前提条件：User割当済み / 正常／異常：正常 / 優先度：High / 担当：Platform
+178	18_テスト	IAM-A-001	Identity Center	ReadOnly	Resource変更を実施	AccessDenied					AccessDenied	未着手		前提条件：User割当済み / 正常／異常：異常 / 優先度：High / 担当：Security
+179	18_テスト	IAM-A-002	BreakGlass	緊急Role	AssumeRoleし復旧操作	必要操作成功し即時通知					必要操作成功し即時通知	未着手		前提条件：承認・MFA準備 / 正常／異常：正常 / 優先度：Critical / 担当：Security
+180	18_テスト	LOG-N-001	CloudTrail	Organization Trail	各AccountでAPI操作	Log Archive S3へ出力					Log Archive S3へ出力	未着手		前提条件：Trail有効 / 正常／異常：正常 / 優先度：Critical / 担当：Security
+181	18_テスト	LOG-A-001	CloudTrail	Trail保護	一般管理者でStopLogging	AccessDenied					AccessDenied	未着手		前提条件：SCP適用済み / 正常／異常：異常 / 優先度：Critical / 担当：Security
+182	18_テスト	LOG-N-002	KMS	CloudTrail暗号化	S3 Object暗号化情報を確認	指定KMS Keyで暗号化					指定KMS Keyで暗号化	未着手		前提条件：Trail出力済み / 正常／異常：正常 / 優先度：High / 担当：Security
+183	18_テスト	LOG-A-002	KMS	ログ復号制御	ログObjectを取得	Decrypt不可					Decrypt不可	未着手		前提条件：一般Userでアクセス / 正常／異常：異常 / 優先度：High / 担当：Security
+184	18_テスト	CFG-N-001	Config	Recorder	Resourceを作成・変更	Configに記録					Configに記録	未着手		前提条件：Baseline展開済み / 正常／異常：正常 / 優先度：High / 担当：Security
+185	18_テスト	CFG-N-002	Config	Aggregator	Security Accountで集約表示	全対象Account/Region表示					全対象Account/Region表示	未着手		前提条件：全Account Recorder有効 / 正常／異常：正常 / 優先度：High / 担当：Security
+186	18_テスト	SEC-N-001	GuardDuty	Organization Member	Member一覧を確認	全対象AccountがEnabled					全対象AccountがEnabled	未着手		前提条件：自動有効化済み / 正常／異常：正常 / 優先度：High / 担当：Security
+187	18_テスト	SEC-A-001	Security Service	無効化防止	一般管理者でDetector削除	AccessDenied					AccessDenied	未着手		前提条件：SCP適用済み / 正常／異常：異常 / 優先度：Critical / 担当：Security
+188	18_テスト	SS-N-001	StackSets	Auto Deployment	StackSet展開を待ち確認	Baseline Stack成功					Baseline Stack成功	未着手		前提条件：対象OUへ新Account追加 / 正常／異常：正常 / 優先度：High / 担当：Platform
+189	18_テスト	TF-N-001	Terraform	Remote State	plan/apply実行	S3 State更新・Lock作成					S3 State更新・Lock作成	未着手		前提条件：Backend設定済み / 正常／異常：正常 / 優先度：Critical / 担当：Platform
+190	18_テスト	TF-A-001	Terraform	State Lock	同一Stateへapply	Lock Errorで停止					Lock Errorで停止	未着手		前提条件：別ProcessでLock保持 / 正常／異常：異常 / 優先度：High / 担当：Platform
+191	18_テスト	TF-A-002	Terraform	prevent_destroy	destroy planを実行	Lifecycle errorで停止					Lifecycle errorで停止	未着手		前提条件：保護Resourceをtarget / 正常／異常：異常 / 優先度：Critical / 担当：Platform
+192	18_テスト	LIFE-N-001	Account Lifecycle	Quarantine→Prod移動	AccountをProd OUへ移動	Prod SCP/Baselineが有効					Prod SCP/Baselineが有効	未着手		前提条件：受入完了 / 正常／異常：正常 / 優先度：High / 担当：Platform
+193	19_リソース対応表	1		Organization					organizations	aws_organizations_organization		確定		主な引数：feature_set, enabled_policy_types / 主なOutput／実績値：id, roots / Import ID例：o-xxxxxxxxxx / 注意事項：既存Organizationはimport
+194	19_リソース対応表	2		OU					organizations	aws_organizations_organizational_unit		確定		主な引数：name, parent_id / 主なOutput／実績値：id, arn / Import ID例：ou-xxxx-xxxxxxxx / 注意事項：階層変更の影響を確認
+195	19_リソース対応表	3		Member Account					organizations	aws_organizations_account		確定		主な引数：name, email, parent_id, role_name, close_on_deletion / 主なOutput／実績値：id, arn / Import ID例：123456789012 / 注意事項：prevent_destroy必須を推奨
+196	19_リソース対応表	4		Organizations Policy					organizations	aws_organizations_policy		確定		主な引数：name, type, content / 主なOutput／実績値：id, arn / Import ID例：p-xxxxxxxx / 注意事項：JSONは別ファイル管理
+197	19_リソース対応表	5		Policy Attachment					organizations	aws_organizations_policy_attachment		確定		主な引数：policy_id, target_id / 主なOutput／実績値：- / Import ID例：<target-id>:<policy-id> / 注意事項：段階適用・ロールバック設計
+198	19_リソース対応表	6		Delegated Administrator					org-services	aws_organizations_delegated_administrator		検討中		主な引数：account_id, service_principal / 主なOutput／実績値：- / Import ID例：<account-id>/<service-principal> / 注意事項：サービス固有API推奨の場合あり
+199	19_リソース対応表	7		Trusted Access					org-services	aws_organizations_aws_service_access またはサービス固有設定		検討中		主な引数：service_principal / 主なOutput／実績値：- / Import ID例：service principal / 注意事項：各サービスの公式手順を優先
+200	19_リソース対応表	8		CloudFormation StackSet					account-baseline	aws_cloudformation_stack_set		確定		主な引数：permission_model, call_as, auto_deployment, template_body / 主なOutput／実績値：id / Import ID例：StackSet name / 注意事項：SERVICE_MANAGED前提を確認
+201	19_リソース対応表	9		Stack Instances					account-baseline	aws_cloudformation_stack_instances		確定		主な引数：deployment_targets, regions, operation_preferences / 主なOutput／実績値：- / Import ID例：StackSet/target / 注意事項：OU移動・削除時のretain設計
+202	19_リソース対応表	10		S3 Backend					各State	terraform backend s3		確定		主な引数：bucket, key, region, encrypt, kms_key_id, use_lockfile / 主なOutput／実績値：- / Import ID例：- / 注意事項：認証情報を直書きしない
+203	19_リソース対応表	11		S3 State Bucket					bootstrap	aws_s3_bucket等		確定		主な引数：bucket, versioning, encryption, public access block / 主なOutput／実績値：arn / Import ID例：bucket name / 注意事項：State自身とは別State
+204	19_リソース対応表	12		KMS Key					bootstrap/logging	aws_kms_key		検討中		主な引数：policy, rotation, deletion window / 主なOutput／実績値：arn, key_id / Import ID例：key-id / 注意事項：Key Policyでロックアウト防止
+205	19_リソース対応表	13		Organization Trail					org-services	aws_cloudtrail		確定		主な引数：is_organization_trail, s3_bucket_name, kms_key_id / 主なOutput／実績値：arn / Import ID例：trail name / 注意事項：Bucket/Key Policy前提
+206	19_リソース対応表	14		Config Aggregator					org-services	aws_config_configuration_aggregator		検討中		主な引数：organization_aggregation_source / 主なOutput／実績値：arn / Import ID例：name / 注意事項：Delegated Admin/Role前提
+207	19_リソース対応表	15		Provider Alias					各Root Module	provider aws { alias / assume_role }		確定		主な引数：region, allowed_account_ids, role_arn / 主なOutput／実績値：- / Import ID例：- / 注意事項：新Account作成と同一applyに依存させない
+208	20_参照URL	1			HashiCorp S3 Backend		use_lockfile、Versioning、認証情報の注意							トピック：Terraform Backend / URL：https://developer.hashicorp.com/terraform/language/backend/s3 / 確認日：2026-08-03
+209	20_参照URL	2			Terraform Provider Requirements		required_providersとlock file							トピック：Provider Version / URL：https://developer.hashicorp.com/terraform/language/providers/requirements / 確認日：2026-08-03
+210	20_参照URL	3			aws_organizations_organization		Organization管理・import							トピック：Organization / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_organization / 確認日：2026-08-03
+211	20_参照URL	4			aws_organizations_organizational_unit		OU作成・import							トピック：OU / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_organizational_unit / 確認日：2026-08-03
+212	20_参照URL	5			aws_organizations_account		Account作成・削除時挙動							トピック：Account / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_account / 確認日：2026-08-03
+213	20_参照URL	6			aws_organizations_policy		SCP/Tag/Backup/RCP等							トピック：Policy / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_policy / 確認日：2026-08-03
+214	20_参照URL	7			aws_organizations_policy_attachment		Root/OU/AccountへのAttach							トピック：Policy Attachment / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_policy_attachment / 確認日：2026-08-03
+215	20_参照URL	8			aws_organizations_delegated_administrator		委任管理Account登録							トピック：Delegated Admin / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/organizations_delegated_administrator / 確認日：2026-08-03
+216	20_参照URL	9			aws_cloudformation_stack_set		StackSet定義							トピック：StackSet / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudformation_stack_set / 確認日：2026-08-03
+217	20_参照URL	10			aws_cloudformation_stack_instances		OU/Regionへの展開							トピック：Stack Instances / URL：https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudformation_stack_instances / 確認日：2026-08-03
+218	20_参照URL	11			AWS Organizations User Guide		組織設計全般							トピック：Organizations / URL：https://docs.aws.amazon.com/organizations/latest/userguide/orgs_introduction.html / 確認日：2026-08-03
+219	20_参照URL	12			AWS SCP Best Practices		権限境界・検証							トピック：SCP / URL：https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_scps.html / 確認日：2026-08-03
+220	20_参照URL	13			AWS StackSets with Organizations		OU単位配布							トピック：StackSets / URL：https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-orgs-associate-stackset-with-org.html / 確認日：2026-08-03
