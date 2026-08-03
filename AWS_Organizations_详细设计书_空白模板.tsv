@@ -1,0 +1,310 @@
+﻿No.	大分類	中分類	設計項目	設定値（記入欄）	設計内容・記入基準	対象／適用範囲	確認方法	重要度	確認状況	備考
+1	01. 全体設計	Organization基本情報	Organization名／識別名		社内で利用するOrganizationの識別名を記入する。	Organization全体	管理画面または管理台帳で確認	必須	未確認	
+2	01. 全体設計	Organization基本情報	Organization ID		AWSが発行するOrganization IDを構築後に記入する。	Organization全体	AWS Organizations画面で確認	必須	未確認	
+3	01. 全体設計	Organization基本情報	機能セット		ALL FEATURESまたはCONSOLIDATED BILLINGの採用値を記入する。	Organization全体	AWS Organizations設定画面で確認	必須	未確認	
+4	01. 全体設計	管理方針	管理アカウント用途		管理アカウントで実施する業務と、配置を禁止する業務リソースを定義する。	Management Account	管理アカウント内のリソース一覧を確認	必須	未確認	
+5	01. 全体設計	管理方針	ホームリージョン		組織管理・セキュリティ集約の主リージョンを記入する。	Organization全体	各サービスの設定画面で確認	必須	未確認	
+6	01. 全体設計	管理方針	利用許可リージョン		利用を許可するリージョンを列挙する。	全メンバーアカウント	許可／禁止リージョンで操作試験	必須	未確認	
+7	01. 全体設計	管理方針	利用禁止リージョン		利用を禁止するリージョンを列挙する。	全メンバーアカウント	禁止リージョンで操作拒否を確認	必須	未確認	
+8	01. 全体設計	管理方針	グローバルサービス例外		IAM、Route 53、CloudFront等、リージョン制限から除外するサービスを定義する。	全メンバーアカウント	対象サービスの正常操作を確認	必須	未確認	
+9	01. 全体設計	命名規則	OU命名規則		OU名の形式、英数字・記号・大文字小文字のルールを記入する。	全OU	OU一覧と設計書を照合	必須	未確認	
+10	01. 全体設計	命名規則	アカウント命名規則		システム名、環境名、用途を含む命名規則を記入する。	全アカウント	アカウント一覧と設計書を照合	必須	未確認	
+11	01. 全体設計	タグ方針	アカウントタグ		Owner、CostCenter、Environment、System等の必須タグを定義する。	全メンバーアカウント	アカウントタグを確認	必須	未確認	
+12	01. 全体設計	責任分界	組織管理責任者		Organizations、OU、SCP、アカウント移動の管理責任者を記入する。	Organization全体	運用体制表で確認	必須	未確認	
+13	01. 全体設計	責任分界	セキュリティ管理責任者		集中セキュリティサービスとインシデント対応の責任者を記入する。	Organization全体	運用体制表で確認	必須	未確認	
+14	01. 全体設計	責任分界	費用管理責任者		請求、予算、コスト配賦、異常費用対応の責任者を記入する。	Organization全体	運用体制表で確認	必須	未確認	
+15	02. OU設計	OUパラメータ	OU名		OUの正式名称を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+16	02. OU設計	OUパラメータ	OU ID		AWSが発行するOU IDを構築後に記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+17	02. OU設計	OUパラメータ	親OU		Rootまたは上位OU名を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+18	02. OU設計	OUパラメータ	用途		当該OUに収容するアカウントの用途・分類基準を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+19	02. OU設計	OUパラメータ	収容対象アカウント		収容するアカウント名またはアカウント種別を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+20	02. OU設計	OUパラメータ	適用SCP		当該OUへ適用するSCP名を列挙する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+21	02. OU設計	OUパラメータ	適用Tag Policy		当該OUへ適用するTag Policy名を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+22	02. OU設計	OUパラメータ	適用Backup Policy		当該OUへ適用するBackup Policy名を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+23	02. OU設計	OUパラメータ	管理担当		OU配下のアカウント管理責任者を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+24	02. OU設計	OUパラメータ	アカウント移動条件		他OUから当該OUへ移動する条件を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+25	02. OU設計	OUパラメータ	アカウント退出条件		当該OUから他OUへ移動する条件を記入する。	OUごと	OU一覧・有効ポリシーを確認	必須	未確認	
+26	03. アカウント設計	アカウントパラメータ	アカウント名		AWSアカウントの正式名称を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+27	03. アカウント設計	アカウントパラメータ	Account ID		AWSが発行する12桁のAccount IDを構築後に記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+28	03. アカウント設計	アカウントパラメータ	Root Email		Rootユーザーに使用する一意のメールアドレスを記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+29	03. アカウント設計	アカウントパラメータ	所属OU		アカウントを配置するOU名を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+30	03. アカウント設計	アカウントパラメータ	アカウント用途		Management、Security、Log Archive、Network、Workload等の用途を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+31	03. アカウント設計	アカウントパラメータ	環境区分		Production、Staging、Development、Sandbox等を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+32	03. アカウント設計	アカウントパラメータ	システム名		当該アカウントで管理するシステム名を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+33	03. アカウント設計	アカウントパラメータ	業務Owner		業務上の責任部門・責任者を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+34	03. アカウント設計	アカウントパラメータ	技術Owner		技術運用の責任部門・責任者を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+35	03. アカウント設計	アカウントパラメータ	セキュリティ連絡先		セキュリティ通知先を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+36	03. アカウント設計	アカウントパラメータ	請求連絡先		請求・費用通知先を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+37	03. アカウント設計	アカウントパラメータ	許可リージョン		当該アカウントで利用可能なリージョンを記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+38	03. アカウント設計	アカウントパラメータ	主要利用サービス		利用予定の主要AWSサービスを列挙する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+39	03. アカウント設計	アカウントパラメータ	インターネット接続可否		直接インターネット接続の可否・条件を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+40	03. アカウント設計	アカウントパラメータ	外部共有可否		組織外アカウントや外部主体への共有可否を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+41	03. アカウント設計	アカウントパラメータ	データ区分		Public、Internal、Confidential等のデータ分類を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+42	03. アカウント設計	アカウントパラメータ	予算上限		月次または年次の予算額・管理単位を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+43	03. アカウント設計	アカウントパラメータ	アカウント停止条件		利用停止判断の条件を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+44	03. アカウント設計	アカウントパラメータ	アカウント閉鎖条件		データ保管、承認、契約確認等の閉鎖条件を記入する。	アカウントごと	AWS Organizations／Account画面と照合	必須	未確認	
+45	04. 認証・権限設計	Root／Identity Center	管理アカウントRoot MFA		MFA方式、保管者、利用条件を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+46	04. 認証・権限設計	Root／Identity Center	メンバーアカウントRoot管理方式		Root資格情報の集中管理または個別管理方式を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+47	04. 認証・権限設計	Root／Identity Center	Rootメール管理		共有メールボックス、配布先、変更手順を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+48	04. 認証・権限設計	Root／Identity Center	Root利用条件		Root利用が許可される緊急事象を定義する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+49	04. 認証・権限設計	Root／Identity Center	Root利用承認者		Root利用の承認者を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+50	04. 認証・権限設計	Root／Identity Center	Root利用後処理		パスワード変更、MFA確認、証跡確認、報告方法を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+51	04. 認証・権限設計	Root／Identity Center	Identity Source		Identity Center Directory、外部IdP等の認証元を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+52	04. 認証・権限設計	Root／Identity Center	MFA要件		MFA必須対象、方式、再認証条件を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+53	04. 認証・権限設計	Root／Identity Center	セッション時間		Permission Setごとのセッション有効時間を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+54	04. 認証・権限設計	Root／Identity Center	Permission Set名		付与するPermission Set名を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+55	04. 認証・権限設計	Root／Identity Center	Permission Set用途		管理者、参照者、監査者等の用途を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+56	04. 認証・権限設計	Root／Identity Center	付与ポリシー		Permission Setに付与する権限ポリシーを記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+57	04. 認証・権限設計	Root／Identity Center	割当Group		Permission Setを割り当てるユーザーGroupを記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+58	04. 認証・権限設計	Root／Identity Center	割当アカウント		Permission Setの割当先アカウントを記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+59	04. 認証・権限設計	Root／Identity Center	本番変更権限		本番環境で許可する変更操作と禁止操作を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+60	04. 認証・権限設計	Root／Identity Center	緊急アクセスRole		緊急時に利用するRole名、権限、利用条件を記入する。	Organizationまたはアカウントごと	ログイン・許可／拒否試験	必須	未確認	
+61	05. SCP設計	Service Control Policy	SCP名		SCPの正式名称を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+62	05. SCP設計	Service Control Policy	Policy ID		AWSが発行するPolicy IDを構築後に記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+63	05. SCP設計	Service Control Policy	目的		制御対象と導入目的を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+64	05. SCP設計	Service Control Policy	適用先		Root、OU、アカウントのいずれへ適用するか記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+65	05. SCP設計	Service Control Policy	Deny対象Action		拒否するAWS API Actionを記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+66	05. SCP設計	Service Control Policy	対象Resource		制御対象Resourceまたはワイルドカード条件を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+67	05. SCP設計	Service Control Policy	条件キー		RequestedRegion、PrincipalArn、PrincipalOrgID等の条件を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+68	05. SCP設計	Service Control Policy	例外Role／Principal		制御から除外するRoleまたはPrincipalを記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+69	05. SCP設計	Service Control Policy	例外理由		例外が必要な理由と承認者を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+70	05. SCP設計	Service Control Policy	適用順序		Test、Sandbox、NonProd、Prod等の段階適用順を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+71	05. SCP設計	Service Control Policy	ロールバック方法		誤適用時に解除または旧版へ戻す手順を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+72	05. SCP設計	Service Control Policy	影響対象		影響するAWSサービス・運用手順を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+73	05. SCP設計	Service Control Policy	テスト項目		許可操作、拒否操作、例外Roleの試験内容を記入する。	SCPごと	Policy画面・CloudTrail・API試験	必須	未確認	
+74	06. 組織ポリシー設計	Tag／Backup／その他Policy	Tag Policy名		Tag Policyの名称を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+75	06. 組織ポリシー設計	Tag／Backup／その他Policy	必須Tag Key		必須とするTag Keyを列挙する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+76	06. 組織ポリシー設計	Tag／Backup／その他Policy	許容Tag Value		固定値または許容値一覧を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+77	06. 組織ポリシー設計	Tag／Backup／その他Policy	大文字小文字ルール		Tag Key／Valueの大小文字ルールを記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+78	06. 組織ポリシー設計	Tag／Backup／その他Policy	Tag Policy適用先		適用するRoot、OU、アカウントを記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+79	06. 組織ポリシー設計	Tag／Backup／その他Policy	Backup Policy名		Backup Policyの名称を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+80	06. 組織ポリシー設計	Tag／Backup／その他Policy	バックアップ対象		対象サービス、Resource、Tag条件を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+81	06. 組織ポリシー設計	Tag／Backup／その他Policy	バックアップ頻度		日次、週次等の頻度を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+82	06. 組織ポリシー設計	Tag／Backup／その他Policy	保持期間		世代数または保持日数を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+83	06. 組織ポリシー設計	Tag／Backup／その他Policy	クロスアカウントコピー		コピー先アカウントと条件を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+84	06. 組織ポリシー設計	Tag／Backup／その他Policy	クロスリージョンコピー		コピー先リージョンと条件を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+85	06. 組織ポリシー設計	Tag／Backup／その他Policy	Resource Control Policy		利用有無、対象サービス、制御内容を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+86	06. 組織ポリシー設計	Tag／Backup／その他Policy	AI Services Opt-out Policy		利用有無と適用方針を記入する。	Policyごと	有効ポリシー・準拠状況を確認	必須	未確認	
+87	07. 委任管理設計	CloudFormation StackSets	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	CloudFormation StackSets	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+88	07. 委任管理設計	CloudFormation StackSets	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	CloudFormation StackSets	サービス管理画面で委任先を確認	必須	未確認	
+89	07. 委任管理設計	CloudFormation StackSets	管理リージョン		管理・集約に使用するリージョンを記入する。	CloudFormation StackSets	サービス設定画面で確認	必須	未確認	
+90	07. 委任管理設計	CloudFormation StackSets	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	CloudFormation StackSets	テストアカウント追加で確認	必須	未確認	
+91	07. 委任管理設計	AWS Security Hub	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	AWS Security Hub	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+92	07. 委任管理設計	AWS Security Hub	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	AWS Security Hub	サービス管理画面で委任先を確認	必須	未確認	
+93	07. 委任管理設計	AWS Security Hub	管理リージョン		管理・集約に使用するリージョンを記入する。	AWS Security Hub	サービス設定画面で確認	必須	未確認	
+94	07. 委任管理設計	AWS Security Hub	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	AWS Security Hub	テストアカウント追加で確認	必須	未確認	
+95	07. 委任管理設計	Amazon GuardDuty	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	Amazon GuardDuty	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+96	07. 委任管理設計	Amazon GuardDuty	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	Amazon GuardDuty	サービス管理画面で委任先を確認	必須	未確認	
+97	07. 委任管理設計	Amazon GuardDuty	管理リージョン		管理・集約に使用するリージョンを記入する。	Amazon GuardDuty	サービス設定画面で確認	必須	未確認	
+98	07. 委任管理設計	Amazon GuardDuty	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	Amazon GuardDuty	テストアカウント追加で確認	必須	未確認	
+99	07. 委任管理設計	Amazon Inspector	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	Amazon Inspector	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+100	07. 委任管理設計	Amazon Inspector	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	Amazon Inspector	サービス管理画面で委任先を確認	必須	未確認	
+101	07. 委任管理設計	Amazon Inspector	管理リージョン		管理・集約に使用するリージョンを記入する。	Amazon Inspector	サービス設定画面で確認	必須	未確認	
+102	07. 委任管理設計	Amazon Inspector	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	Amazon Inspector	テストアカウント追加で確認	必須	未確認	
+103	07. 委任管理設計	Amazon Macie	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	Amazon Macie	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+104	07. 委任管理設計	Amazon Macie	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	Amazon Macie	サービス管理画面で委任先を確認	必須	未確認	
+105	07. 委任管理設計	Amazon Macie	管理リージョン		管理・集約に使用するリージョンを記入する。	Amazon Macie	サービス設定画面で確認	必須	未確認	
+106	07. 委任管理設計	Amazon Macie	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	Amazon Macie	テストアカウント追加で確認	必須	未確認	
+107	07. 委任管理設計	AWS Config	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	AWS Config	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+108	07. 委任管理設計	AWS Config	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	AWS Config	サービス管理画面で委任先を確認	必須	未確認	
+109	07. 委任管理設計	AWS Config	管理リージョン		管理・集約に使用するリージョンを記入する。	AWS Config	サービス設定画面で確認	必須	未確認	
+110	07. 委任管理設計	AWS Config	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	AWS Config	テストアカウント追加で確認	必須	未確認	
+111	07. 委任管理設計	AWS Backup	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	AWS Backup	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+112	07. 委任管理設計	AWS Backup	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	AWS Backup	サービス管理画面で委任先を確認	必須	未確認	
+113	07. 委任管理設計	AWS Backup	管理リージョン		管理・集約に使用するリージョンを記入する。	AWS Backup	サービス設定画面で確認	必須	未確認	
+114	07. 委任管理設計	AWS Backup	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	AWS Backup	テストアカウント追加で確認	必須	未確認	
+115	07. 委任管理設計	AWS Firewall Manager	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	AWS Firewall Manager	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+116	07. 委任管理設計	AWS Firewall Manager	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	AWS Firewall Manager	サービス管理画面で委任先を確認	必須	未確認	
+117	07. 委任管理設計	AWS Firewall Manager	管理リージョン		管理・集約に使用するリージョンを記入する。	AWS Firewall Manager	サービス設定画面で確認	必須	未確認	
+118	07. 委任管理設計	AWS Firewall Manager	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	AWS Firewall Manager	テストアカウント追加で確認	必須	未確認	
+119	07. 委任管理設計	IAM Access Analyzer	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	IAM Access Analyzer	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+120	07. 委任管理設計	IAM Access Analyzer	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	IAM Access Analyzer	サービス管理画面で委任先を確認	必須	未確認	
+121	07. 委任管理設計	IAM Access Analyzer	管理リージョン		管理・集約に使用するリージョンを記入する。	IAM Access Analyzer	サービス設定画面で確認	必須	未確認	
+122	07. 委任管理設計	IAM Access Analyzer	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	IAM Access Analyzer	テストアカウント追加で確認	必須	未確認	
+123	07. 委任管理設計	AWS CloudTrail	Trusted Access利用有無		当該サービスでOrganizations Trusted Accessを利用するか記入する。	AWS CloudTrail	Organizationsのサービスアクセス一覧を確認	必須	未確認	
+124	07. 委任管理設計	AWS CloudTrail	Delegated Administrator		委任管理先アカウント名とAccount IDを記入する。	AWS CloudTrail	サービス管理画面で委任先を確認	必須	未確認	
+125	07. 委任管理設計	AWS CloudTrail	管理リージョン		管理・集約に使用するリージョンを記入する。	AWS CloudTrail	サービス設定画面で確認	必須	未確認	
+126	07. 委任管理設計	AWS CloudTrail	新規アカウント自動加入		新規アカウントを自動有効化・自動加入するか記入する。	AWS CloudTrail	テストアカウント追加で確認	必須	未確認	
+127	08. CloudTrail設計	Organization Trail	Trail名		Organization Trailの名称を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+128	08. CloudTrail設計	Organization Trail	Organization Trail		組織全体を対象にするか記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+129	08. CloudTrail設計	Organization Trail	Multi Region		全リージョン記録の有無を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+130	08. CloudTrail設計	Organization Trail	Global Service Event		グローバルサービスイベント記録の有無を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+131	08. CloudTrail設計	Organization Trail	Management Event		Read／Writeイベントの記録範囲を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+132	08. CloudTrail設計	Organization Trail	Data Event		S3、Lambda等の記録対象を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+133	08. CloudTrail設計	Organization Trail	Insights Event		CloudTrail Insightsの利用有無を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+134	08. CloudTrail設計	Organization Trail	ログファイル検証		Log File Validationの有効・無効を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+135	08. CloudTrail設計	Organization Trail	保存先アカウント		ログ保存先アカウントを記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+136	08. CloudTrail設計	Organization Trail	保存先S3 Bucket		保存先Bucket名を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+137	08. CloudTrail設計	Organization Trail	S3 Prefix		ログ格納Prefixを記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+138	08. CloudTrail設計	Organization Trail	暗号化方式		SSE-S3またはSSE-KMS等を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+139	08. CloudTrail設計	Organization Trail	KMS Key		利用するKMS Keyの識別情報を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+140	08. CloudTrail設計	Organization Trail	保管期間		監査要件に基づく保管期間を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+141	08. CloudTrail設計	Organization Trail	Lifecycle		ストレージクラス移行・削除条件を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+142	08. CloudTrail設計	Organization Trail	Object Lock		利用有無、保持モード、保持期間を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+143	08. CloudTrail設計	Organization Trail	ログ参照権限		閲覧可能なRole、部門、申請条件を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+144	08. CloudTrail設計	Organization Trail	停止・削除検知		Trail停止、削除、設定変更の通知方法を記入する。	Organization全体	ログ出力・暗号化・拒否試験	必須	未確認	
+145	09. AWS Config設計	Config集中管理	対象アカウント		Configを有効化するアカウント範囲を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+146	09. AWS Config設計	Config集中管理	対象リージョン		Configを有効化するリージョンを記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+147	09. AWS Config設計	Config集中管理	記録対象Resource		全対応Resourceまたは限定対象を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+148	09. AWS Config設計	Config集中管理	Global Resource記録		IAM等のグローバルResourceを記録するリージョンを記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+149	09. AWS Config設計	Config集中管理	Delivery Channel		Snapshot／履歴の出力先を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+150	09. AWS Config設計	Config集中管理	Snapshot頻度		設定Snapshotの配信頻度を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+151	09. AWS Config設計	Config集中管理	Aggregator名		Organization Aggregator名を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+152	09. AWS Config設計	Config集中管理	Aggregator配置アカウント		集約先アカウントを記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+153	09. AWS Config設計	Config集中管理	Aggregator対象リージョン		集約対象リージョンを記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+154	09. AWS Config設計	Config集中管理	Organization Rule		組織全体へ適用するConfig Ruleを列挙する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+155	09. AWS Config設計	Config集中管理	Conformance Pack		利用するConformance Pack名を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+156	09. AWS Config設計	Config集中管理	非準拠通知		通知先、重要度、対応期限を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+157	09. AWS Config設計	Config集中管理	自動修復		自動修復対象と実行条件を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+158	09. AWS Config設計	Config集中管理	保持期間		Configデータの保持期間を記入する。	対象アカウント・リージョン	Recorder・Aggregator・Complianceを確認	必須	未確認	
+159	10. セキュリティサービス設計	Security Hub	集約リージョン		Security Hubの集約リージョンに関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+160	10. セキュリティサービス設計	Security Hub	Linked Region		Security HubのLinked Regionに関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+161	10. セキュリティサービス設計	Security Hub	有効化Standard		Security Hubの有効化Standardに関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+162	10. セキュリティサービス設計	Security Hub	無効化Control		Security Hubの無効化Controlに関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+163	10. セキュリティサービス設計	Security Hub	無効化理由		Security Hubの無効化理由に関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+164	10. セキュリティサービス設計	Security Hub	Finding集約		Security HubのFinding集約に関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+165	10. セキュリティサービス設計	Security Hub	Finding通知先		Security HubのFinding通知先に関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+166	10. セキュリティサービス設計	Security Hub	Severity別対応時間		Security HubのSeverity別対応時間に関する採用値・対象・運用条件を記入する。	Security Hub	管理画面・Finding・通知試験	必須	未確認	
+167	10. セキュリティサービス設計	GuardDuty	対象リージョン		GuardDutyの対象リージョンに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+168	10. セキュリティサービス設計	GuardDuty	自動有効化		GuardDutyの自動有効化に関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+169	10. セキュリティサービス設計	GuardDuty	S3 Protection		GuardDutyのS3 Protectionに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+170	10. セキュリティサービス設計	GuardDuty	EKS Protection		GuardDutyのEKS Protectionに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+171	10. セキュリティサービス設計	GuardDuty	Runtime Monitoring		GuardDutyのRuntime Monitoringに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+172	10. セキュリティサービス設計	GuardDuty	Malware Protection		GuardDutyのMalware Protectionに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+173	10. セキュリティサービス設計	GuardDuty	RDS Protection		GuardDutyのRDS Protectionに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+174	10. セキュリティサービス設計	GuardDuty	Lambda Protection		GuardDutyのLambda Protectionに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+175	10. セキュリティサービス設計	GuardDuty	Trusted IP List		GuardDutyのTrusted IP Listに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+176	10. セキュリティサービス設計	GuardDuty	Threat IP List		GuardDutyのThreat IP Listに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+177	10. セキュリティサービス設計	GuardDuty	Suppression Rule		GuardDutyのSuppression Ruleに関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+178	10. セキュリティサービス設計	GuardDuty	Finding出力先		GuardDutyのFinding出力先に関する採用値・対象・運用条件を記入する。	GuardDuty	管理画面・Finding・通知試験	必須	未確認	
+179	10. セキュリティサービス設計	Inspector	対象リージョン		Inspectorの対象リージョンに関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+180	10. セキュリティサービス設計	Inspector	EC2 Scan		InspectorのEC2 Scanに関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+181	10. セキュリティサービス設計	Inspector	ECR Scan		InspectorのECR Scanに関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+182	10. セキュリティサービス設計	Inspector	Lambda Scan		InspectorのLambda Scanに関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+183	10. セキュリティサービス設計	Inspector	Lambda Code Scan		InspectorのLambda Code Scanに関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+184	10. セキュリティサービス設計	Inspector	自動有効化		Inspectorの自動有効化に関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+185	10. セキュリティサービス設計	Inspector	Finding通知先		InspectorのFinding通知先に関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+186	10. セキュリティサービス設計	Inspector	除外条件		Inspectorの除外条件に関する採用値・対象・運用条件を記入する。	Inspector	管理画面・Finding・通知試験	必須	未確認	
+187	10. セキュリティサービス設計	Macie	利用有無		Macieの利用有無に関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+188	10. セキュリティサービス設計	Macie	対象リージョン		Macieの対象リージョンに関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+189	10. セキュリティサービス設計	Macie	対象S3 Bucket		Macieの対象S3 Bucketに関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+190	10. セキュリティサービス設計	Macie	Classification Job		MacieのClassification Jobに関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+191	10. セキュリティサービス設計	Macie	Discovery頻度		MacieのDiscovery頻度に関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+192	10. セキュリティサービス設計	Macie	Finding通知先		MacieのFinding通知先に関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+193	10. セキュリティサービス設計	Macie	除外条件		Macieの除外条件に関する採用値・対象・運用条件を記入する。	Macie	管理画面・Finding・通知試験	必須	未確認	
+194	10. セキュリティサービス設計	IAM Access Analyzer	Analyzer種別		IAM Access AnalyzerのAnalyzer種別に関する採用値・対象・運用条件を記入する。	IAM Access Analyzer	管理画面・Finding・通知試験	必須	未確認	
+195	10. セキュリティサービス設計	IAM Access Analyzer	Zone of Trust		IAM Access AnalyzerのZone of Trustに関する採用値・対象・運用条件を記入する。	IAM Access Analyzer	管理画面・Finding・通知試験	必須	未確認	
+196	10. セキュリティサービス設計	IAM Access Analyzer	対象リージョン		IAM Access Analyzerの対象リージョンに関する採用値・対象・運用条件を記入する。	IAM Access Analyzer	管理画面・Finding・通知試験	必須	未確認	
+197	10. セキュリティサービス設計	IAM Access Analyzer	Archive Rule		IAM Access AnalyzerのArchive Ruleに関する採用値・対象・運用条件を記入する。	IAM Access Analyzer	管理画面・Finding・通知試験	必須	未確認	
+198	10. セキュリティサービス設計	IAM Access Analyzer	Finding通知先		IAM Access AnalyzerのFinding通知先に関する採用値・対象・運用条件を記入する。	IAM Access Analyzer	管理画面・Finding・通知試験	必須	未確認	
+199	10. セキュリティサービス設計	IAM Access Analyzer	レビュー頻度		IAM Access Analyzerのレビュー頻度に関する採用値・対象・運用条件を記入する。	IAM Access Analyzer	管理画面・Finding・通知試験	必須	未確認	
+200	11. 集中ログS3・KMS設計	S3／KMS	ログBucket名		集中ログ用S3 Bucket名を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+201	11. 集中ログS3・KMS設計	S3／KMS	配置アカウント		Log Archive等の配置先アカウントを記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+202	11. 集中ログS3・KMS設計	S3／KMS	配置リージョン		Bucketを作成するリージョンを記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+203	11. 集中ログS3・KMS設計	S3／KMS	Versioning		Versioningの有効・無効を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+204	11. 集中ログS3・KMS設計	S3／KMS	Public Access Block		各Public Access Block設定値を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+205	11. 集中ログS3・KMS設計	S3／KMS	TLS強制		非TLS通信を拒否するか記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+206	11. 集中ログS3・KMS設計	S3／KMS	書込Principal		CloudTrail、Config等の書込主体を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+207	11. 集中ログS3・KMS設計	S3／KMS	Source条件		SourceArn、SourceAccount、PrincipalOrgID等の条件を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+208	11. 集中ログS3・KMS設計	S3／KMS	読取Principal		ログ閲覧が可能なRoleを記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+209	11. 集中ログS3・KMS設計	S3／KMS	削除Principal		ログ削除が可能な管理主体を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+210	11. 集中ログS3・KMS設計	S3／KMS	Lifecycle		移行先ストレージクラスと削除時期を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+211	11. 集中ログS3・KMS設計	S3／KMS	KMS Key Alias		ログ暗号化に使用するKey Aliasを記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+212	11. 集中ログS3・KMS設計	S3／KMS	Key Administrator		KMS Key管理者を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+213	11. 集中ログS3・KMS設計	S3／KMS	Key User		Encrypt／Decrypt利用者を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+214	11. 集中ログS3・KMS設計	S3／KMS	Key Rotation		自動ローテーションの有無を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+215	11. 集中ログS3・KMS設計	S3／KMS	削除待機期間		KMS Key削除待機日数を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+216	11. 集中ログS3・KMS設計	S3／KMS	暗号化Context条件		サービス書込時のEncryption Context条件を記入する。	Log Archive／Security関連アカウント	Bucket Policy・Key Policy・実ログで確認	必須	未確認	
+217	12. 共有サービス・責任分界	Network／Shared Services	Network管理アカウント		共有Network Resourceを保有するアカウントを記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+218	12. 共有サービス・責任分界	Network／Shared Services	Shared Servicesアカウント		共通サービスを保有するアカウントを記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+219	12. 共有サービス・責任分界	Network／Shared Services	Transit Gateway所有者		TGWの所有アカウントと管理責任者を記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+220	12. 共有サービス・責任分界	Network／Shared Services	AWS RAM共有範囲		共有対象をOrganization、OU、Account単位で記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+221	12. 共有サービス・責任分界	Network／Shared Services	Route 53 Resolver所有者		Resolver Endpoint／Ruleの所有アカウントを記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+222	12. 共有サービス・責任分界	Network／Shared Services	Private Hosted Zone共有		共有先VPC・アカウント・承認方法を記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+223	12. 共有サービス・責任分界	Network／Shared Services	IPAM管理		IPAM管理アカウント、Scope、Poolを記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+224	12. 共有サービス・責任分界	Network／Shared Services	Firewall管理		Network Firewall、Firewall Manager等の管理責任を記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+225	12. 共有サービス・責任分界	Network／Shared Services	共有解除条件		OU移動・アカウント停止時の共有解除条件を記入する。	関連アカウント	Resource所有者・共有状態・疎通を確認	必須	未確認	
+226	13. コスト管理設計	請求・予算・異常検知	Consolidated Billing		一括請求の管理方針を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+227	13. コスト管理設計	請求・予算・異常検知	Cost Allocation Tag		費用配賦に使用するTag Keyを記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+228	13. コスト管理設計	請求・予算・異常検知	Cost Category		費用分類ルールを記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+229	13. コスト管理設計	請求・予算・異常検知	Budget管理単位		アカウント、システム、環境等の管理単位を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+230	13. コスト管理設計	請求・予算・異常検知	Budget閾値		通知する金額または割合を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+231	13. コスト管理設計	請求・予算・異常検知	Budget通知先		通知先メール、SNS等を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+232	13. コスト管理設計	請求・予算・異常検知	Cost Anomaly Monitor		監視単位と対象を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+233	13. コスト管理設計	請求・予算・異常検知	異常費用閾値		異常検知の閾値を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+234	13. コスト管理設計	請求・予算・異常検知	Savings Plans／RI管理者		購入・配賦・見直しの責任者を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+235	13. コスト管理設計	請求・予算・異常検知	費用レビュー頻度		日次、週次、月次等のレビュー頻度を記入する。	Organization全体／アカウントごと	Billing／Cost Management画面で確認	必須	未確認	
+236	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	アカウント申請項目		申請時に必要なシステム、Owner、環境、予算、データ区分等を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+237	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	承認者		作成・変更・停止・閉鎖の承認者を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+238	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	初期配置OU		新規アカウントを最初に配置するOUを記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+239	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	初期セキュリティ設定		引渡し前に必須とする設定を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+240	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	初期アクセス設定		Identity Centerの初期割当を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+241	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	初期ログ設定		CloudTrail、Config、Securityサービス加入条件を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+242	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	受入条件		本来のOUへ移動するための完了条件を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+243	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	OU移動手順		移動前確認、実施者、移動後確認を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+244	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	停止手順		アクセス停止、DenyAll、データ保持等を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+245	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	閉鎖前確認		請求、契約、データ、ログ、バックアップの確認内容を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+246	14. アカウントライフサイクル設計	申請・作成・移動・停止・閉鎖	閉鎖後保管		設計書、証跡、ログ、台帳の保管期間を記入する。	全メンバーアカウント	申請票・台帳・操作証跡で確認	必須	未確認	
+247	15. 監視・運用設計	Organizations／Security Event	CreateAccount		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+248	15. 監視・運用設計	Organizations／Security Event	CloseAccount		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+249	15. 監視・運用設計	Organizations／Security Event	MoveAccount		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+250	15. 監視・運用設計	Organizations／Security Event	InviteAccountToOrganization		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+251	15. 監視・運用設計	Organizations／Security Event	LeaveOrganization		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+252	15. 監視・運用設計	Organizations／Security Event	AttachPolicy		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+253	15. 監視・運用設計	Organizations／Security Event	DetachPolicy		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+254	15. 監視・運用設計	Organizations／Security Event	UpdatePolicy		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+255	15. 監視・運用設計	Organizations／Security Event	EnableAWSServiceAccess		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+256	15. 監視・運用設計	Organizations／Security Event	DisableAWSServiceAccess		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+257	15. 監視・運用設計	Organizations／Security Event	RegisterDelegatedAdministrator		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+258	15. 監視・運用設計	Organizations／Security Event	DeregisterDelegatedAdministrator		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+259	15. 監視・運用設計	Organizations／Security Event	Root Login		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+260	15. 監視・運用設計	Organizations／Security Event	CloudTrail停止／削除		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+261	15. 監視・運用設計	Organizations／Security Event	Config Recorder停止		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+262	15. 監視・運用設計	Organizations／Security Event	Securityサービス無効化		検知方法、Severity、通知先、一次対応者、目標対応時間、Runbook番号を記入する。	Organization全体	テストイベントまたはCloudTrail Eventで通知確認	必須	未確認	
+263	15. 監視・運用設計	運用手順	SCP変更手順		申請、レビュー、試験、段階適用、ロールバック手順を記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+264	15. 監視・運用設計	運用手順	OU変更手順		OU作成、名称変更、階層変更、削除の手順を記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+265	15. 監視・運用設計	運用手順	Delegated Admin変更手順		委任先変更時の影響確認と切替手順を記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+266	15. 監視・運用設計	運用手順	リージョン追加手順		新規リージョン許可前のセキュリティ・ログ準備を記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+267	15. 監視・運用設計	運用手順	新規サービス利用申請		利用可否判断、SCP影響、ログ・費用・セキュリティ確認を記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+268	15. 監視・運用設計	運用手順	緊急アクセス手順		承認、利用、監視、終了、事後レビューを記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+269	15. 監視・運用設計	運用手順	定期レビュー		OU、Account、SCP、権限、連絡先、費用のレビュー頻度を記入する。	Organization全体	Runbookレビュー・訓練結果で確認	必須	未確認	
+270	16. 構築手順	Step 01	Organization機能確認		Organizationと機能セットを確認する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+271	16. 構築手順	Step 02	OU作成		設計した階層順にOUを作成する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+272	16. 構築手順	Step 03	基盤アカウント作成		Security、Log Archive、Network等を作成する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+273	16. 構築手順	Step 04	Root保護		Root MFA、メール、緊急アクセスを設定する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+274	16. 構築手順	Step 05	Identity Center設定		Identity Source、Permission Set、割当を設定する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+275	16. 構築手順	Step 06	Trusted Access有効化		必要サービスの組織連携を有効化する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+276	16. 構築手順	Step 07	Delegated Administrator登録		各サービスの委任管理先を登録する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+277	16. 構築手順	Step 08	集中ログ作成		S3、KMS、Organization Trailを設定する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+278	16. 構築手順	Step 09	AWS Config設定		Recorder、Aggregator、Ruleを設定する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+279	16. 構築手順	Step 10	セキュリティサービス設定		Security Hub、GuardDuty、Inspector等を設定する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+280	16. 構築手順	Step 11	Tag／Backup Policy設定		組織ポリシーを作成・適用する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+281	16. 構築手順	Step 12	SCP単体試験		テストアカウントで許可／拒否／例外を試験する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+282	16. 構築手順	Step 13	SCP段階適用		影響の低いOUから順に適用する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+283	16. 構築手順	Step 14	新規アカウント受入試験		ログ、権限、セキュリティ、費用通知を確認する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+284	16. 構築手順	Step 15	実績値反映		ID、ARN、メール、ポリシー適用結果を設計書へ反映する。	Organization全体	実施証跡・画面・ログで確認	必須	未確認	
+285	17. テスト設計	受入試験	OU構成		OU階層、名称、親子関係が設計通りであること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+286	17. テスト設計	受入試験	アカウント所属		各アカウントが設計したOUへ所属していること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+287	17. テスト設計	受入試験	許可リージョン		許可リージョンで必要な操作が成功すること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+288	17. テスト設計	受入試験	禁止リージョン		禁止リージョンで対象操作が拒否されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+289	17. テスト設計	受入試験	Organization離脱防止		メンバーアカウントからOrganizationを離脱できないこと。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+290	17. テスト設計	受入試験	アカウント閉鎖防止		未承認主体からアカウントを閉鎖できないこと。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+291	17. テスト設計	受入試験	Securityサービス保護		一般管理者がCloudTrailやGuardDuty等を無効化できないこと。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+292	17. テスト設計	受入試験	Root利用検知		Rootログイン時に所定の通知が行われること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+293	17. テスト設計	受入試験	Identity Centerログイン		対象Groupが指定アカウントへログインできること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+294	17. テスト設計	受入試験	ReadOnly拒否		参照権限利用者が変更操作を実行できないこと。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+295	17. テスト設計	受入試験	本番管理権限		本番管理者が許可された操作のみ実行できること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+296	17. テスト設計	受入試験	緊急アクセス		承認済み緊急Roleで復旧操作ができ、通知されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+297	17. テスト設計	受入試験	CloudTrail出力		全対象アカウントのイベントが集中S3へ出力されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+298	17. テスト設計	受入試験	CloudTrail暗号化		ログが指定方式で暗号化されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+299	17. テスト設計	受入試験	ログ読取制御		未許可主体が集中ログを参照できないこと。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+300	17. テスト設計	受入試験	ログ削除制御		一般管理者がログを削除できないこと。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+301	17. テスト設計	受入試験	Config記録		対象Resourceの変更がConfigへ記録されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+302	17. テスト設計	受入試験	Config集約		対象アカウント・リージョンの情報がAggregatorへ集約されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+303	17. テスト設計	受入試験	Security Hub集約		対象アカウントのFindingが集約されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+304	17. テスト設計	受入試験	GuardDuty自動加入		新規アカウントが自動的にGuardDutyへ加入すること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+305	17. テスト設計	受入試験	Inspector自動加入		新規アカウントが自動的にInspectorへ加入すること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+306	17. テスト設計	受入試験	Budget通知		設定閾値到達時に所定の通知先へ通知されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+307	17. テスト設計	受入試験	OU移動		OU移動後に有効ポリシーが設計通り切り替わること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+308	17. テスト設計	受入試験	Suspended OU		停止アカウントで業務操作が拒否されること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
+309	17. テスト設計	受入試験	ロールバック		誤ったSCP適用時に定義した手順で復旧できること。	対象Organization／Account	画面、CLI結果、CloudTrail、通知証跡	必須	未確認	
