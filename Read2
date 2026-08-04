@@ -1,0 +1,24 @@
+ご認識のとおり、S3のパブリック公開禁止自体は、クロスアカウントS3 Replicationの阻害要因にはならない認識です。
+
+S3 Replicationは、送信元Bucketをパブリック公開して外部からアクセスする方式ではなく、Amazon S3が指定されたReplication用IAM Roleを引き受け、送信元Bucketから送信先Bucketへオブジェクトを複製するマネージドサービスです。
+
+送信先Bucket Policyについても、Replication用IAM RoleのARNを固定して必要最小限の権限を付与することで、S3 Block Public Accessを有効にしたままクロスアカウントReplicationを構成可能です。
+
+なお、「パブリックなネットワークを経由するため問題ない」というよりは、「Bucketを一般公開せず、特定のIAM Roleに対するサービス間権限で実行されるため、パブリック公開禁止とは競合しない」という説明が正確です。
+
+一方、実際の採用可否については、以下の設定がMegcloud側で許可されるか確認が必要です。
+
+・送信元および送信先BucketのVersioning有効化
+・送信元BucketへのReplication Rule設定
+・Replication用IAM Roleの作成または払い出し
+・送信先Bucket Policyへのクロスアカウント権限追加
+・SSE-KMS利用時のKMS Key PolicyおよびIAM権限設定
+・利用可能Regionの制限内であること
+
+特に、Megcloud提供側が作成・管理している共有S3について利用者側の設定変更が禁止されている場合、VersioningやReplication Ruleを利用者側で設定できない可能性があります。
+
+したがって、現時点では「S3パブリック公開禁止とは競合せず、AWSの技術仕様上は採用可能。ただし、Megcloud管理側で必要なBucket・IAM・KMS設定を実施可能か確認が必要」と判断します。
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-requirements.html
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/setting-repl-config-perm-overview.html
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication-config-for-kms-objects.html
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/disable-replication.html
