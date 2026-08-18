@@ -1,0 +1,48 @@
+﻿分類	リソース	CDK化可否	推奨実装	備考	AWS公式ドキュメント
+ネットワーク	VPC / Subnet	○（L2）	ec2.Vpc	VPC、SubnetをCDKで定義可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.Vpc.html
+ネットワーク	Route Table	○（L1）	ec2.CfnRouteTable	Route Table、Routeを定義可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.CfnRouteTable.html
+ネットワーク	VPC Flow Logs	○（L2）	ec2.FlowLog	CloudWatch Logs、S3等への出力設定が可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.FlowLog.html
+ネットワーク	S3 VPC Endpoint	○（L2）	ec2.GatewayVpcEndpoint	S3 Gateway Endpointを作成可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.GatewayVpcEndpoint.html
+ネットワーク	VPC Endpoint Policy	○（L2）	addToPolicy()	Endpoint PolicyをCDKで管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.GatewayVpcEndpoint.html
+ネットワーク	TGW Attachment	○（L1）	ec2.CfnTransitGatewayVpcAttachment	Transit GatewayとVPCのAttachmentを定義可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.CfnTransitGatewayVpcAttachment.html
+ネットワーク	IGW	○（L1）	ec2.CfnInternetGateway	Internet Gatewayを明示的に作成可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.CfnInternetGateway.html
+DNS	Route 53 Profile	○（L1）	route53profiles.CfnProfile	Route 53 Profileを作成可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_route53profiles.CfnProfile.html
+DNS	Route 53 Profile Association	○（L1）	route53profiles.CfnProfileAssociation	ProfileとVPCの関連付けが可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_route53profiles.CfnProfileAssociation.html
+セキュリティ	KMS Key	○（L2）	kms.Key	Key、Alias、Key Policy、Rotation等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_kms.Key.html
+セキュリティ	ACM	○（L2）	acm.Certificate	Certificate、DNS Validation等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_certificatemanager.Certificate.html
+セキュリティ	Shield Standard	×	対象外	AWSが標準提供するため個別構築不要	https://docs.aws.amazon.com/waf/latest/developerguide/ddos-overview.html
+セキュリティ	Shield Advanced	△	Protection等	Advanced利用時はSubscriptionとProtectionを別途設計	https://docs.aws.amazon.com/waf/latest/developerguide/enable-ddos-prem.html
+セキュリティ	Secrets Manager	○（L2）	secretsmanager.Secret	Secret、Rotation、Resource Policy等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_secretsmanager.Secret.html
+セキュリティ	Security Hub	○（L1）	securityhub.CfnHub 等	Hub、Organization Configuration等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_securityhub.CfnHub.html
+セキュリティ	GuardDuty	○（L1）	guardduty.CfnDetector 等	Detector、Member、Filter等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_guardduty.CfnDetector.html
+ログ	S3 Bucket & Policy（ログ）	○（L2）	s3.Bucket	Bucket、Bucket Policy、Encryption、Lifecycle等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_s3.Bucket.html
+ログ	CloudWatch	○（L2）	CloudWatch Construct	Alarm、Dashboard、Metric等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudwatch-readme.html
+ログ	CloudWatch Logs	○（L2）	logs.LogGroup	LogGroup、Retention、Subscription等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_logs-readme.html
+ログ	Data Firehose	○（L2/L1）	Firehose Construct	S3 Destination等はL2、複雑な構成はL1で対応可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_kinesisfirehose-readme.html
+ログ	Lambda	○（L2）	lambda.Function	Function、Role、Environment、VPC、Event Source等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_lambda.Function.html
+ログ	AWS Config	○（L1）	Config CfnXxx	Configuration Recorder、Delivery Channel、Config Rule等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_config.CfnConfigurationRecorder.html
+ログ	CloudTrail	○（L2）	cloudtrail.Trail	Trail、ログ出力先等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_cloudtrail-readme.html
+運用	AWS Backup	○（L2）	Backup Construct	Backup Vault、Plan、Selection等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_backup-readme.html
+運用	AWS Budgets	○（L1）	budgets.CfnBudget	Budget、通知条件等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_budgets.CfnBudget.html
+運用	Systems Manager / Session Manager	△	SSM Document、IAM等	Session Manager本体ではなくDocument、権限、設定等をCDK化	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ssm.CfnDocument.html
+運用	AWS Health	×	対象外	Health自体は作成しない。EventBridge / SNS等の受信側をCDK化	https://docs.aws.amazon.com/health/latest/ug/cloudwatch-events-health.html
+運用	SNS	○（L2）	sns.Topic	Topic、Subscription、Topic Policy等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_sns-readme.html
+運用	EventBridge	○（L2）	events.Rule / events.EventBus	Rule、EventBus、Target等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_events-readme.html
+アプリケーション	IAM Role	○（L2）	iam.Role	Role、Managed Policy、Inline Policy等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_iam.Role.html
+アプリケーション	EC2 Instance	○（L2）	ec2.Instance	Instance Type、Subnet、Role、SG、AMI、EBS等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.Instance.html
+アプリケーション	EBS	○（L2）	ec2.Volume	EBS Volumeを独立またはEC2付随で作成可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.Volume.html
+アプリケーション	AMI	△	ec2.MachineImage	AMI IDやSSM Parameter等を参照。通常AMI本体は別工程で作成	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.MachineImage.html
+アプリケーション	Security Group	○（L2）	ec2.SecurityGroup	Ingress / Egress Ruleを含めて管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.SecurityGroup.html
+アプリケーション	ELB（Classic Load Balancer）	○（L2）	elasticloadbalancing.LoadBalancer	Classic ELBを利用する場合にCDK化可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_elasticloadbalancing.LoadBalancer.html
+アプリケーション	ALB	○（L2）	elasticloadbalancingv2.ApplicationLoadBalancer	ALB、Listener、Target Group等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_elasticloadbalancingv2.ApplicationLoadBalancer.html
+アプリケーション	WAF	○（L1）	wafv2.CfnWebACL	WebACL、Rule、IPSet等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_wafv2.CfnWebACL.html
+データ分析	Glue Database	○（L1）	glue.CfnDatabase	Glue Data Catalog Databaseを管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_glue-readme.html
+データ分析	Glue Crawler	○（L1）	glue.CfnCrawler	Crawler、Role、Target等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_glue.CfnCrawler.html
+データ分析	Glue Table	○（L1）	glue.CfnTable	Data Catalog Tableを管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_glue-readme.html
+データ分析	Glue Connection	○（L1）	glue.CfnConnection	Glue Connectionを管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_glue-readme.html
+データ分析	Glue Job	○（L1）	glue.CfnJob	Job、Role、Script Location、Parameter等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_glue-readme.html
+データ分析	Glue Workflow	○（L1）	glue.CfnWorkflow	Workflowを管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_glue.CfnWorkflow.html
+データ分析	Athena Workgroup	○（L1）	athena.CfnWorkGroup	WorkGroup、Result Configuration、Encryption等を管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_athena.CfnWorkGroup.html
+データ分析	S3 Bucket（コード）	○（L2）	s3.Bucket	コード格納用Bucketを管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_s3.Bucket.html
+データ分析	S3 Bucket（データ）	○（L2）	s3.Bucket	データ格納用Bucketを管理可能	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_s3.Bucket.html
+データ分析	Lake Formation	○（L1）	Lake Formation CfnXxx	DataLakeSettings、Permissions等を管理可能。L1中心	https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_lakeformation-readme.html
