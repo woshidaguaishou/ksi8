@@ -208,4 +208,22 @@ AWS CLI／バッチ方式を採用する場合は、以下を実装条件とし�
 AWS CLI v2は上传时默认计算Checksum，S3也会在服务端验证，不一致时不会保存对象。
 对象。
 
+区分
 
+採用条件
+
+Megcloud運用条件
+
+V2アカウントからV2外AWSアカウントへのS3クロスアカウントReplicationについて、Security Team／Megcloud管理側から事前承認を取得できること
+
+Megcloud運用条件
+
+対象AWS Configルールについて、対象アカウントまたは対象Replication設定を例外登録・評価対象外とできること、またはアラーム発報後も是正不要として運用承認されること
+
+Megcloud運用条件
+
+Megcloud共有S3に対して、Versioning有効化およびReplication Rule設定が許可されていること
+
+Megcloud運用条件
+
+Replication用IAM Roleの作成・利用が許可されていること
