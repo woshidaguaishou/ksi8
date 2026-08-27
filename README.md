@@ -226,6 +226,36 @@ Megcloud共有S3に対して、Versioning有効化およびReplication Rule設�
 
 Megcloud運用条件
 
+
+対象：
+/data/export/*.csv
+
+実行：
+毎日 02:00
+
+転送先：
+s3://xxx/raw/onprem/systemA/YYYY/MM/DD/
+
+転送方式：
+AWS CLI
+
+正常時：
+・S3アップロード
+・正常終了コード 0
+・処理済みファイルをarchiveへ移動
+
+異常時：
+・3回Retry
+・元ファイルを削除しない
+・エラー終了
+・ログ出力
+
+二重起動：
+禁止
+
+再実行：
+対象日を指定して手動実行可能
+
 Replication用IAM Roleの作成・利用が許可されていること
 Megcloud／Security Teamの事前承認を取得し、AWS Configルール上でデータ利活用基盤AWSアカウントを許可されたReplication先として例外設定できること。また、Versioning、Replication用IAM Role、送信先Bucket Policy、必要に応じてKMS権限を設定可能であること
 https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules_lambda-functions.html
