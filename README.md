@@ -261,6 +261,9 @@ Megcloud／Security Teamの事前承認を取得し、AWS Configルール上で�
 https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules_lambda-functions.html
 https://docs.aws.amazon.com/config/latest/APIReference/API_ConfigRule.html
 
+「特権昇格に対する権限操作禁止」と「Control Tower／CloudFormation管理IAM Roleの変更禁止」が影響しないか確認したいです。sts:AssumeRole、専用Role作成、Trust Policy設定が許可されることをAssumeRole方式の採用条件とします。
+
+
 
 
 
