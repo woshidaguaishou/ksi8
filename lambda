@@ -1,0 +1,424 @@
+可以。下面我按**可以直接放进基本设计书/详细设计说明资料**的粒度，全部整理成日语。前提是你们目前已经确定的方案：
+
+> **データ利活用基盤側から定期的にMegcloud V2（稲沢）の共有S3を確認し、対象のcsv.gzをデータ利活用基盤S3へPullする。**
+
+并且当前文件规模大约 **128MB/ファイル**，所以第一阶段用 **1个Lambda** 足够。
+
+---
+
+# 1. Lambda基本設計
+
+| 設計項目                 | 設計内容                                         | 補足・考え方                                   |
+| -------------------- | -------------------------------------------- | ---------------------------------------- |
+| Function名            | `megcloud-data-import-lambda`                | 命名规则可根据项目标准调整                            |
+| 目的                   | Megcloud V2共有S3からデータ利活用基盤S3へのデータ取込           | 基盤側からのPull方式                             |
+| 実行契機                 | EventBridge Schedulerによる定期実行                 | cron／rateは運用要件により決定                      |
+| Runtime              | Python                                       | AWS API制御中心のため実装・保守が容易                   |
+| Lambda数              | 1関数                                          | 現行データ量では過度な分割は不要                         |
+| Source               | Megcloud V2（稲沢）共有S3                          | クロスアカウント参照                               |
+| Destination          | データ利活用基盤S3                                   | Data Lakeの指定Prefixへ格納                    |
+| 対象ファイル               | `*.csv.gz`                                   | 対象Prefixも環境変数で指定                         |
+| 転送方向                 | Megcloud V2 → データ利活用基盤                       | 実行主体はデータ利活用基盤側                           |
+| 転送方式                 | Amazon S3 Server-Side Copy                   | ファイル本体をLambdaへダウンロードしない                  |
+| 通常コピー                | `CopyObject`                                 | 現行128MB程度で利用可能                           |
+| 大容量対応                | 5GB超の場合はMultipart Upload Copyを検討             | 現行では実装不要、拡張条件として定義                       |
+| 元ファイル                | 削除しない                                        | Megcloud側に保持                             |
+| 差分判定                 | Source Key、VersionId等を基準に取込済み判定              | VersionIdが利用できない場合はSize、LastModified等も利用 |
+| 重複防止                 | 同一ソースオブジェクトの再取込を防止                           | 冪等性を確保                                   |
+| 状態管理                 | 初期構成ではS3オブジェクト／Metadata等を利用                  | 厳密な履歴管理が必要になればDynamoDB等を追加               |
+| Memory               | 512MBを初期値                                    | 実測後調整                                    |
+| Timeout              | 300秒を初期値                                     | ファイル本体をLambda経由しないため長時間設定は不要             |
+| Reserved Concurrency | 1                                            | 同一処理の二重起動を抑止                             |
+| Ephemeral Storage    | 標準値                                          | ファイル本体を`/tmp`に保存しない                      |
+| Logging              | CloudWatch Logs                              | JSON形式の構造化ログを推奨                          |
+| Monitoring           | Lambda Errors、Duration、Throttles、COPY_FAILED | CloudWatch Alarmで監視                      |
+| Retry                | AWS SDK Retry＋次回Scheduler実行時の再処理             | 一時障害と恒久障害を分けて扱う                          |
+| DLQ                  | Scheduler起動失敗用にSQSを検討                        | Lambda業務処理失敗とは分離                         |
+| Network              | 原則LambdaをVPCに配置しない                           | S3 APIのみ利用する場合は構成簡素化を優先                  |
+| Encryption           | S3設計に準拠                                      | SSE-KMS利用時はKMS権限追加                       |
+| Cross-account権限      | Megcloud側Bucket Policy＋基盤側IAM Role           | 最小権限で設定                                  |
+
+---
+
+# 2. IAM／S3基本設計
+
+| 対象                    | 必要な設計                                                            |
+| --------------------- | ---------------------------------------------------------------- |
+| Megcloud V2共有S3       | データ利活用基盤Lambda実行Roleに対する`ListBucket`、`GetObject`許可               |
+| Source Bucket Policy  | Lambda実行Role ARNをPrincipalとして明示し、対象Prefixに限定                     |
+| Lambda Execution Role | Source S3読取、Destination S3書込、CloudWatch Logs出力                   |
+| Destination S3        | `PutObject`、必要に応じて`GetObject`／`ListBucket`                       |
+| SSE-KMS利用時            | Source Keyの`Decrypt`、Destination Keyの`Encrypt`／`GenerateDataKey` |
+| Destination Bucket    | Prefix、暗号化、Lifecycle、Versioning、保持期間を別途S3設計で定義                   |
+
+---
+
+# 3. Lambda処理フロー
+
+| No. | 処理         | 内容                                                |
+| --: | ---------- | ------------------------------------------------- |
+|   1 | 起動         | EventBridge SchedulerからLambdaを定期起動                |
+|   2 | 設定読込       | Source Bucket、Prefix、Destination Bucket等を環境変数から取得 |
+|   3 | オブジェクト一覧取得 | `ListObjectsV2`でMegcloud共有S3を検索                   |
+|   4 | ファイル種別判定   | `.csv.gz`以外を処理対象外とする                              |
+|   5 | 取込済み判定     | Source Key／VersionId等から既存取込有無を確認                  |
+|   6 | Skip判定     | 既に正常取込済みの場合は処理をスキップ                               |
+|   7 | Copy実行     | S3 Server-Side CopyでData Lakeへ格納                  |
+|   8 | 結果確認       | Copy結果および対象オブジェクト情報を確認                            |
+|   9 | 状態記録       | 成功／Skip／失敗をログ・管理情報へ記録                             |
+|  10 | 終了判定       | 全対象処理後に成功件数・失敗件数を集計                               |
+|  11 | エラー通知      | 失敗が存在する場合はCloudWatch Alarm等で通知                    |
+|  12 | 次回再処理      | 次回実行時、未処理／失敗対象のみ再処理                               |
+
+---
+
+# 4. 設計思想
+
+| 設計思想          | 内容                                                        |
+| ------------- | --------------------------------------------------------- |
+| 制御処理とデータ転送の分離 | Lambdaは転送の「判断・指示」を担当し、ファイル本体の転送はS3に任せる                    |
+| Pull方式        | データ利活用基盤側が取込タイミングと対象データを管理する                              |
+| シンプルな構成       | 現行規模では1 Lambdaとし、不要なSQS／Step Functions／DynamoDBを最初から導入しない |
+| 冪等性           | 同じLambdaが複数回実行されても、同一ファイルを重複取込しない                         |
+| 再実行可能性        | 一部ファイルが失敗しても、次回実行時に失敗分のみ再処理可能とする                          |
+| 最小権限          | Megcloud側S3へのアクセスは対象Bucket／Prefixに限定                      |
+| 設定とコードの分離     | Bucket名、Prefix、拡張子等を環境変数化し、環境差分をコードへ埋め込まない                |
+| 障害影響の局所化      | 1ファイルの失敗で他の正常ファイルまで再転送しない                                 |
+| 拡張可能性         | ファイル数・容量増加時にはSQS／Step Functions／Multipart Copyへ拡張できる構造にする |
+| 運用性優先         | 正常／Skip／失敗をCloudWatchで確認でき、障害原因を追跡可能とする                   |
+
+---
+
+# 5. 設計思想の中心
+
+设计书里可以直接放这一段：
+
+> **本Lambdaは、データファイル本体をLambda実行環境にダウンロードして再アップロードする方式ではなく、データ連携処理の制御に特化した構成とする。**
+>
+> LambdaはMegcloud V2共有S3に格納されたオブジェクトの検出、取込対象判定、重複判定、Amazon S3のコピーAPI実行、および処理結果の記録を担当する。
+>
+> 実データの転送処理についてはAmazon S3のServer-Side Copyを利用することで、Lambdaのメモリ、Ephemeral Storageおよびネットワークをファイル本体が経由しない構成とする。
+>
+> また、EventBridge Schedulerによる定期実行を前提とし、同一オブジェクトが複数回検出された場合でも重複取込が発生しないよう冪等性を確保する。処理途中で一部オブジェクトが失敗した場合についても、次回実行時に未処理または失敗オブジェクトのみを再処理可能な構成とする。
+
+---
+
+# 6. 文字構成図
+
+```text
+┌──────────────────────────────┐
+│ データ利活用基盤 AWSアカウント                 │
+│                                              │
+│  ┌──────────────────────┐                    │
+│  │ EventBridge Scheduler│                    │
+│  │     定期実行          │                    │
+│  └──────────┬───────────┘                    │
+│             │ Invoke                         │
+│             ▼                                │
+│  ┌──────────────────────────────────────┐    │
+│  │ megcloud-data-import-lambda          │    │
+│  │                                      │    │
+│  │ ① Source S3一覧取得                  │    │
+│  │ ② csv.gz対象判定                     │    │
+│  │ ③ 取込済み／未取込判定               │    │
+│  │ ④ S3 Copy API実行                    │    │
+│  │ ⑤ 成功／失敗／Skip記録               │    │
+│  └──────────┬───────────────────────────┘    │
+│             │                                │
+│             │ PutObject / Copy               │
+│             ▼                                │
+│       ┌───────────────┐                      │
+│       │ S3 Data Lake  │                      │
+│       │ raw/megcloud/ │                      │
+│       └───────────────┘                      │
+│                                              │
+│        ↓ Logs / Metrics                      │
+│  ┌────────────────────┐                      │
+│  │ CloudWatch         │                      │
+│  │ Logs / Alarm       │                      │
+│  └────────────────────┘                      │
+└──────────────────────────────┘
+                 ▲
+                 │ GetObject / ListBucket
+                 │ Cross Account
+                 │
+┌──────────────────────────────┐
+│ Megcloud V2（稲沢）AWSアカウント               │
+│                                              │
+│       ┌───────────────────────┐              │
+│       │ 共有S3 Bucket          │              │
+│       │ export/inazawa/        │              │
+│       │                       │              │
+│       │ xxx001.csv.gz         │              │
+│       │ xxx002.csv.gz         │              │
+│       │ xxx003.csv.gz         │              │
+│       └───────────────────────┘              │
+│                  ▲                           │
+│        Bucket Policy                         │
+│ Lambda Execution Roleのみ許可                │
+└──────────────────────────────┘
+```
+
+---
+
+# 7. 数据实际怎么走
+
+这里在设计书里最好特意注明：
+
+```text
+【制御経路】
+
+EventBridge
+   ↓
+Lambda
+   ↓
+S3 API
+```
+
+但是数据本体不是：
+
+```text
+Megcloud S3
+   ↓
+Lambda
+   ↓
+Data Lake
+```
+
+而是逻辑上：
+
+```text
+                 Lambda
+                   │
+                   │ Copy命令
+                   ▼
+Megcloud S3 ─────────────────→ Data Lake S3
+              S3側でコピー
+```
+
+因此可以写：
+
+> **Lambdaはデータ転送経路にはならず、S3 Copy処理の制御主体として動作する。**
+
+---
+
+# 8. 具体例
+
+假设某天Megcloud生成了以下文件：
+
+```text
+s3://megcloud-v2-share/export/inazawa/2026/09/02/
+
+customer_001.csv.gz   128MB
+customer_002.csv.gz   115MB
+customer_003.csv.gz   126MB
+```
+
+目标：
+
+```text
+s3://data-lake-prod/raw/megcloud/inazawa/2026/09/02/
+```
+
+### 第一次执行
+
+目标里只有：
+
+```text
+customer_001.csv.gz
+```
+
+Lambda判定：
+
+| Source              | Destination | 判定   | 処理   |
+| ------------------- | ----------- | ---- | ---- |
+| customer_001.csv.gz | 已存在         | 取込済み | Skip |
+| customer_002.csv.gz | 不存在         | 未取込  | Copy |
+| customer_003.csv.gz | 不存在         | 未取込  | Copy |
+
+结果：
+
+```text
+COPY_SKIP
+customer_001.csv.gz
+
+COPY_SUCCESS
+customer_002.csv.gz
+
+COPY_SUCCESS
+customer_003.csv.gz
+```
+
+---
+
+# 9. 部分失败例
+
+假设：
+
+```text
+customer_001 → SKIP
+customer_002 → SUCCESS
+customer_003 → AccessDenied
+```
+
+本次执行结果：
+
+```text
+Processed : 3
+Success   : 1
+Skip      : 1
+Failed    : 1
+```
+
+CloudWatch记录：
+
+```text
+event=COPY_FAILED
+source_key=customer_003.csv.gz
+error_code=AccessDenied
+```
+
+修正权限后，下一次Scheduler再次执行：
+
+```text
+customer_001 → SKIP
+customer_002 → SKIP
+customer_003 → RETRY → SUCCESS
+```
+
+因此不需要再次复制001和002。
+
+---
+
+# 10. 环境变量例
+
+| 環境変数                | 設定例                      |
+| ------------------- | ------------------------ |
+| `SOURCE_BUCKET`     | `megcloud-v2-share-prod` |
+| `SOURCE_PREFIX`     | `export/inazawa/`        |
+| `DEST_BUCKET`       | `data-lake-prod`         |
+| `DEST_PREFIX`       | `raw/megcloud/inazawa/`  |
+| `FILE_SUFFIX`       | `.csv.gz`                |
+| `MAX_FILES_PER_RUN` | `500`                    |
+| `LOG_LEVEL`         | `INFO`                   |
+
+设计原则：
+
+> **環境固有値はコードへハードコードしない。**
+
+---
+
+# 11. 正常処理例
+
+```text
+EventBridge Scheduler
+      ↓
+02:00 Lambda起動
+      ↓
+Megcloud共有S3
+ListObjectsV2
+      ↓
+3ファイル検出
+      ↓
+取込済み判定
+      ↓
+1件 Skip
+2件 Copy
+      ↓
+Data Lake S3
+      ↓
+CloudWatch
+SUCCESS=2
+SKIP=1
+FAILED=0
+```
+
+---
+
+# 12. 异常处理例
+
+```text
+EventBridge Scheduler
+      ↓
+Lambda
+      ↓
+Megcloud S3
+      ↓
+Copy
+      ↓
+AccessDenied
+      ↓
+Retry
+      ↓
+再度失敗
+      ↓
+COPY_FAILEDログ
+      ↓
+CloudWatch Alarm
+      ↓
+担当者確認
+      ↓
+権限修正
+      ↓
+次回Scheduler
+      ↓
+失敗ファイルのみ再処理
+```
+
+---
+
+# 13. 将来的扩展边界
+
+目前：
+
+```text
+EventBridge Scheduler
+        ↓
+1 Lambda
+        ↓
+S3 Copy
+```
+
+够用。
+
+以后只有达到以下条件时才拆：
+
+| 条件                 | 拡張案                              |
+| ------------------ | -------------------------------- |
+| 单次发现大量文件，15分钟内处理不完 | Scanner Lambda＋SQS＋Worker Lambda |
+| 单文件超过5GB           | Multipart Upload Copy            |
+| Copy处理编排复杂         | Step Functions                   |
+| 需要严格管理每个文件状态       | DynamoDB                         |
+| 需要高并发              | SQS＋多个Worker Lambda              |
+| 需要CSV内容转换          | Glue／ECS等独立ETL处理                 |
+
+文字导图就是：
+
+```text
+現在
+│
+├─ 128MB程度
+├─ ファイル数限定
+└─ 単純なS3→S3取込
+        │
+        ▼
+    1 Lambda
+        │
+        │ 規模拡大
+        ▼
+┌────────────────────────────┐
+│ ファイル数増加             │
+│ 実行時間15分超過           │
+│ 5GB超オブジェクト          │
+│ 厳密な状態管理要件         │
+└──────────┬─────────────────┘
+           ▼
+SQS / Step Functions /
+Multipart Copy / DynamoDB
+```
+
+### 最终设计原则一句话
+
+> **現時点の要件に対しては構成を必要以上に複雑化せず、1つのLambdaを制御処理に特化させ、実データ転送はS3のマネージド機能に任せる。将来、データ量・ファイル数・処理時間が現行設計の境界を超えた時点で、非同期・分散処理方式へ拡張する。**
+
+这套内容基本可以直接覆盖你WBS里的 `Lambda設計`、`EventBridge（定期実行）設計`、`大容量データ転送方式設計`、`差分判定・重複取込防止・連携状態管理設計` 四块。
