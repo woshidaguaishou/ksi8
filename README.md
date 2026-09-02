@@ -261,6 +261,25 @@ Megcloud／Security Teamの事前承認を取得し、AWS Configルール上で�
 https://docs.aws.amazon.com/config/latest/developerguide/evaluate-config_develop-rules_lambda-functions.html
 https://docs.aws.amazon.com/config/latest/APIReference/API_ConfigRule.html
 
+
+現時点の制限一覧では、sts:AssumeRole 自体を明示的に禁止する記載は確認できていません。
+一方、以下の制限については本方式への影響有無を確認する必要があります。
+
+・「特権昇格に対する権限操作禁止」
+・「AWS Control Tower／CloudFormationによって設定されたIAM Roleの変更禁止」
+
+AssumeRole方式を採用する条件として、以下を満たすことを前提とします。
+
+1. SCP等で sts:AssumeRole が明示的にDenyされていないこと
+2. Megcloud V2側にデータ連携専用IAM Roleを作成可能であること
+3. 当該RoleのTrust Policyに、データ利活用基盤側Lambda実行RoleをPrincipalとして設定可能であること
+4. データ利活用基盤側Lambda実行Roleに、対象Roleへの sts:AssumeRole 権限を付与可能であること
+5. V2側Roleに対象S3への s3:ListBucket、s3:GetObject 等の必要最小限の権限を設定可能であること
+6. SSE-KMSを利用している場合、必要に応じて kms:Decrypt 権限を設定可能であること
+7. Control Tower／CloudFormation管理Roleを変更せず、必要に応じて専用Roleとして構成できること
+
+上記を満たす場合、AssumeRole方式は技術的に採用可能と考えます。
+
 「特権昇格に対する権限操作禁止」と「Control Tower／CloudFormation管理IAM Roleの変更禁止」が影響しないか確認したいです。sts:AssumeRole、専用Role作成、Trust Policy設定が許可されることをAssumeRole方式の採用条件とします。
 
 
