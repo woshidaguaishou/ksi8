@@ -1,0 +1,76 @@
+お疲れ様です。
+稲沢中継サーバ → データ利活用基盤S3 の転送バッチについて、現時点の設計内容を整理しました。
+
+現状、以下の方針でShell Scriptを作成しています。
+
+* 実行方式：**手動実行**
+* 転送方式：**AWS CLI（`aws s3 cp`）**
+* 転送先Bucket：
+  `datautl-prd-gdp-apne1-s3-bucket-johokei-raw`
+* 転送先Prefix：既存のテーブル別Prefixを利用する想定
+* ローカルディレクトリとS3 Prefixの対応は、Shell Script本体とは分離し、`prefix_map.conf` で管理
+* S3転送失敗時：最大3回Retry
+* S3転送成功時：稲沢中継サーバ上の対象ファイルを削除
+* S3転送失敗時：稲沢中継サーバ上の対象ファイルは削除せず保持
+* 実行結果はログ出力
+* ログはShell Script配置ディレクトリ配下の `log` ディレクトリへ保存
+* `flock` により二重起動を防止
+* cron等の定期実行設定は行わない
+
+また、S3側が **SSE-KMS** を使用しているため、Shell Scriptとは別にAWS側でIAM/KMS権限の設計が必要と考えています。
+
+バッチ実行主体には、基本的に以下の権限を最小権限として付与する想定です。
+
+* `s3:PutObject`
+* Multipart Upload利用時に必要となるS3権限
+* `kms:GenerateDataKey`
+* `kms:Decrypt`
+
+
+=================================================
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowJohokeiS3Upload",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::datautl-prd-gdp-apne1-s3-bucket-johokei-raw/*"
+      ]
+    },
+    {
+      "Sid": "AllowJohokeiKms",
+      "Effect": "Allow",
+      "Action": [
+        "kms:GenerateDataKey",
+        "kms:Decrypt"
+      ],
+      "Resource": [
+        "【KMS Key ARN】"
+      ]
+    }
+  ]
+}
+
+===============================================
+
+対象Resourceは、今回の情報系S3 Bucketおよび当該Bucketで使用しているKMS Keyに限定する想定です。
+
+なお、IAM PolicyやAWS認証情報をShell Script内へ記載することは想定しておらず、AWS側および実機側で認証設定を実施したうえで、Shell ScriptからAWS CLIを実行する構成とします。
+
+現時点で、以下については未確定事項として残しています。
+
+* 稲沢中継サーバ上の実際のデータ格納ルートディレクトリ
+* 各ローカルディレクトリとS3 Prefixの正式なMapping
+* 転送対象ファイルの最終的なFile Pattern
+* バッチ実行時に使用するAWS Identity（IAM User / Role等）
+* 使用するKMS KeyのARN
+* S3 BucketのDefault Encryptionのみを使用するか、AWS CLI実行時にKMS Keyを明示指定する必要があるか
+* 必要に応じたKMS Key Policy側の権限設定
+
+上記未確定部分については、値確定後に設定値として反映できる構成にしているため、Shell Script本体の処理ロジックを大きく変更する必要はない想定です。
