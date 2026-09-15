@@ -7,14 +7,17 @@
 #   稲沢中継サーバに格納された情報系データを、
 #   AWS CLIを使用してデータ利活用基盤のAmazon S3へ転送する。
 #
-#   転送先S3：
+# 転送先Bucket：
 #   datautl-prd-gdp-apne1-s3-bucket-johokei-raw
 #
-#   転送先Prefixについては prefix_map.conf に定義する。
+# 実行方式：
+#   手動実行
+#
+# 実行例：
+#   /bin/bash johokei_s3_upload.sh
 #
 # 正常時：
-#   ・S3への転送が成功したファイルは、
-#     稲沢中継サーバ上から削除する。
+#   ・S3への転送成功後、稲沢中継サーバ上の元ファイルを削除する。
 #
 # 異常時：
 #   ・最大3回までRetryする。
@@ -22,88 +25,124 @@
 #   ・エラーログを出力する。
 #
 # 二重起動：
-#   ・flockを使用し、同時実行を禁止する。
+#   ・flockを使用して同時実行を禁止する。
+#
+# 暗号化：
+#   ・S3側はSSE-KMSを使用する。
+#   ・KMS Key確定後、必要に応じてKMS_KEY_IDへARNを設定する。
+#   ・Bucket Default Encryptionを使用する場合は空欄でもよい。
 #
 # 前提条件：
 #   ・Linux Server
-#   ・AWS CLI v2がインストール済みであること
+#   ・AWS CLI v2がインストールされていること
 #   ・AWS CLIの認証設定が完了していること
-#   ・対象S3 BucketへのPutObject権限があること
+#   ・対象S3 BucketへのIAM権限が設定されていること
+#   ・対象KMS Keyへの必要なIAM/KMS権限が設定されていること
 #   ・AWS S3へHTTPS(TCP/443)で通信可能であること
 #
-# 定期実行：
-#   ・cronにて設定する。
-#   ・具体的な実行時刻は実機構築時に設定する。
+# 注意：
+#   Access Key / Secret Access Keyなどの認証情報は、
+#   本スクリプト内には記載しない。
+#
 # ============================================================
 
 
 # ============================================================
-# ① 設定値
+# ① AWS側設定
 # ============================================================
-
 
 # 【確定】
 # 情報系データ格納先S3 Bucket
 S3_BUCKET="s3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw"
 
 
-# 【実機担当入力】
-# 稲沢中継サーバ上の情報系データ格納ルートディレクトリ
+# 【IAM/KMS設計確定後に設定】
 #
-# 設定例：
+# SSE-KMSで明示的にKMS Keyを指定する場合に設定する。
+#
+# 例：
+# KMS_KEY_ID="arn:aws:kms:ap-northeast-1:123456789012:key/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+#
+# Bucket側のDefault Encryptionとして対象SSE-KMS Keyが設定済みで、
+# Bucket Policy等で明示指定が要求されない場合は空欄でもよい。
+#
+KMS_KEY_ID=""
+
+
+# ============================================================
+# ② 実機環境設定
+# ★ 実機担当者が環境に合わせて設定する
+# ============================================================
+
+# 【実機担当設定】
+# 稲沢中継サーバ上の情報系データ格納Root Directory
+#
+# 例：
 # /data/johokei
 #
 SOURCE_ROOT="/PLEASE/SET/SOURCE/DIRECTORY"
 
 
-# 【実機担当入力】
-# Prefix対応表
+# 【実機担当設定】
+# 転送対象ファイルPattern
 #
-# 各ローカルディレクトリとS3 Prefixの対応を記載する。
-PREFIX_MAP="/opt/scripts/prefix_map.conf"
-
-
-# 【必要に応じて変更】
-# 転送対象ファイル
+# CSVのみ：
+# *.csv
 #
-# 現時点ではCSVを想定
 FILE_PATTERN="*.csv"
 
 
-# 【設計値】
+# ============================================================
+# ③ Script設定
+# 原則変更不要
+# ============================================================
+
+# Script自身が配置されているDirectory
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+
+
+# Local Directory → S3 Prefix対応表
+PREFIX_MAP="${SCRIPT_DIR}/prefix_map.conf"
+
+
+# LogはScript配置Directory配下のlogへ保存する
+LOG_DIR="${SCRIPT_DIR}/log"
+
+
 # 最大転送試行回数
 MAX_RETRY=3
 
 
-# 【設計値】
 # Retry間隔（秒）
 RETRY_INTERVAL=60
 
 
-# 【実機担当入力】
-# ログ保存ディレクトリ
-LOG_DIR="/var/log/johokei-s3-upload"
-
-
-# 【原則変更不要】
 # 二重起動防止Lock File
 LOCK_FILE="/tmp/johokei_s3_upload.lock"
 
 
+# 対象ファイルが存在しない場合、
+# "*.csv"という文字列自体を対象としない
+shopt -s nullglob
+
 
 # ============================================================
-# ② 初期処理
+# ④ 初期処理
 # ============================================================
 
 TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
+
+# Log Directory作成
 mkdir -p "${LOG_DIR}"
 
+
+# 今回のLog File
 LOG_FILE="${LOG_DIR}/johokei_s3_upload_${TIMESTAMP}.log"
 
 
 # ------------------------------------------------------------
-# Log出力用Function
+# Log出力Function
 # ------------------------------------------------------------
 
 log()
@@ -112,24 +151,23 @@ log()
 }
 
 
-
 # ============================================================
-# ③ 二重起動防止
+# ⑤ 二重起動防止
 # ============================================================
 
 exec 200>"${LOCK_FILE}"
 
-flock -n 200
 
-if [ $? -ne 0 ]; then
+if ! flock -n 200; then
+
     log "ERROR: Batch is already running."
+
     exit 2
 fi
 
 
-
 # ============================================================
-# ④ バッチ開始
+# ⑥ バッチ開始
 # ============================================================
 
 log "=================================================="
@@ -137,16 +175,25 @@ log "Batch started."
 log "SOURCE_ROOT : ${SOURCE_ROOT}"
 log "S3_BUCKET   : ${S3_BUCKET}"
 log "PREFIX_MAP  : ${PREFIX_MAP}"
+
+if [ -n "${KMS_KEY_ID}" ]; then
+    log "SSE-KMS     : Explicit KMS Key"
+else
+    log "SSE-KMS     : S3 Bucket Default Encryption"
+fi
+
 log "=================================================="
 
 
-
 # ============================================================
-# ⑤ 事前チェック
+# ⑦ 事前チェック
 # ============================================================
 
 
+# ------------------------------------------------------------
 # AWS CLI確認
+# ------------------------------------------------------------
+
 if ! command -v aws > /dev/null 2>&1; then
 
     log "ERROR: AWS CLI is not installed."
@@ -155,7 +202,26 @@ if ! command -v aws > /dev/null 2>&1; then
 fi
 
 
-# 転送元ルートディレクトリ確認
+# ------------------------------------------------------------
+# AWS認証確認
+#
+# IAM設定そのものはAWS側で実施する。
+# ここではAWS CLIが有効なAWS Identityを取得できることのみ確認する。
+# ------------------------------------------------------------
+
+if ! aws sts get-caller-identity \
+    >> "${LOG_FILE}" 2>&1; then
+
+    log "ERROR: AWS authentication failed."
+
+    exit 1
+fi
+
+
+# ------------------------------------------------------------
+# Source Directory確認
+# ------------------------------------------------------------
+
 if [ ! -d "${SOURCE_ROOT}" ]; then
 
     log "ERROR: Source directory does not exist: ${SOURCE_ROOT}"
@@ -164,7 +230,10 @@ if [ ! -d "${SOURCE_ROOT}" ]; then
 fi
 
 
+# ------------------------------------------------------------
 # Prefix Mapping File確認
+# ------------------------------------------------------------
+
 if [ ! -f "${PREFIX_MAP}" ]; then
 
     log "ERROR: Prefix mapping file does not exist: ${PREFIX_MAP}"
@@ -173,9 +242,29 @@ if [ ! -f "${PREFIX_MAP}" ]; then
 fi
 
 
+# ============================================================
+# ⑧ AWS CLI共通Option作成
+# ============================================================
+
+AWS_CP_OPTIONS=(
+    --only-show-errors
+)
+
+
+# KMS Key ARNが明示設定されている場合のみ、
+# AWS CLIからSSE-KMS Keyを明示指定する。
+if [ -n "${KMS_KEY_ID}" ]; then
+
+    AWS_CP_OPTIONS+=(
+        --sse aws:kms
+        --sse-kms-key-id "${KMS_KEY_ID}"
+    )
+
+fi
+
 
 # ============================================================
-# ⑥ 転送件数初期化
+# ⑨ 件数初期化
 # ============================================================
 
 TARGET_COUNT=0
@@ -183,15 +272,15 @@ SUCCESS_COUNT=0
 ERROR_COUNT=0
 
 
-
 # ============================================================
-# ⑦ Prefix Mapping単位でS3転送
+# ⑩ Prefix Mapping単位でS3転送
 #
-# prefix_map.conf形式：
+# prefix_map.conf Format：
 #
-# ローカルディレクトリ|S3プレフィックス
+# LOCAL_SUBDIR|S3_PREFIX
 #
 # 例：
+#
 # P01060_AG|P01060_AG
 # P01060_AH|P01060_AH
 #
@@ -200,17 +289,37 @@ ERROR_COUNT=0
 while IFS='|' read -r LOCAL_SUBDIR S3_PREFIX
 do
 
-    # 空行をSkip
+    # Windows改行コード除去
+    LOCAL_SUBDIR="${LOCAL_SUBDIR//$'\r'/}"
+    S3_PREFIX="${S3_PREFIX//$'\r'/}"
+
+
+    # 空行Skip
     [ -z "${LOCAL_SUBDIR}" ] && continue
 
 
-    # コメント行をSkip
+    # コメント行Skip
     case "${LOCAL_SUBDIR}" in
         \#*)
             continue
             ;;
     esac
 
+
+    # S3 Prefix未設定の場合はError
+    if [ -z "${S3_PREFIX}" ]; then
+
+        log "ERROR: S3 Prefix is not defined for ${LOCAL_SUBDIR}"
+
+        ERROR_COUNT=$((ERROR_COUNT + 1))
+
+        continue
+    fi
+
+
+    # --------------------------------------------------------
+    # Local/S3 Path生成
+    # --------------------------------------------------------
 
     LOCAL_DIR="${SOURCE_ROOT}/${LOCAL_SUBDIR}"
 
@@ -224,7 +333,7 @@ do
 
 
     # --------------------------------------------------------
-    # ローカルディレクトリが存在しない場合
+    # Local Directory不存在
     # --------------------------------------------------------
 
     if [ ! -d "${LOCAL_DIR}" ]; then
@@ -235,20 +344,30 @@ do
     fi
 
 
-    # --------------------------------------------------------
-    # 対象ファイルを1ファイルずつ処理
-    # --------------------------------------------------------
+    # ========================================================
+    # 対象File取得
+    # ========================================================
 
-    for FILE in "${LOCAL_DIR}"/${FILE_PATTERN}
+    FILES=( "${LOCAL_DIR}"/${FILE_PATTERN} )
+
+
+    if [ ${#FILES[@]} -eq 0 ]; then
+
+        log "No target files: ${LOCAL_DIR}"
+
+        continue
+    fi
+
+
+    # ========================================================
+    # File単位転送
+    # ========================================================
+
+    for FILE in "${FILES[@]}"
     do
 
-        # ファイルが存在しない場合
-        if [ ! -f "${FILE}" ]; then
-            continue
-        fi
-
-
         TARGET_COUNT=$((TARGET_COUNT + 1))
+
 
         FILE_NAME=$(basename "${FILE}")
 
@@ -272,13 +391,23 @@ do
 
 
             # ------------------------------------------------
-            # S3へファイル転送
+            # S3 Upload
+            #
+            # KMS_KEY_ID設定済みの場合：
+            #
+            # aws s3 cp FILE S3_URI \
+            #   --sse aws:kms \
+            #   --sse-kms-key-id KMS_KEY_ID
+            #
+            # KMS_KEY_ID未設定の場合：
+            #
+            # Bucket側Default Encryptionを使用する。
             # ------------------------------------------------
 
             aws s3 cp \
                 "${FILE}" \
                 "${S3_URI}${FILE_NAME}" \
-                --only-show-errors \
+                "${AWS_CP_OPTIONS[@]}" \
                 >> "${LOG_FILE}" 2>&1
 
 
@@ -286,7 +415,7 @@ do
 
 
             # ------------------------------------------------
-            # 正常終了
+            # Upload成功
             # ------------------------------------------------
 
             if [ ${AWS_EXIT_CODE} -eq 0 ]; then
@@ -300,7 +429,7 @@ do
 
 
             # ------------------------------------------------
-            # 異常終了
+            # Upload失敗
             # ------------------------------------------------
 
             log "WARNING: Upload failed: ${FILE_NAME}, ExitCode=${AWS_EXIT_CODE}"
@@ -320,34 +449,30 @@ do
         done
 
 
-
         # ====================================================
-        # ⑧ 転送結果処理
+        # ⑪ 転送結果処理
         # ====================================================
-
-
-        # ----------------------------------------------------
-        # S3転送成功
-        # ----------------------------------------------------
 
         if [ ${UPLOAD_SUCCESS} -eq 1 ]; then
 
 
-            # S3転送成功後のみ
-            # 稲沢中継サーバ上の元ファイルを削除する
+            # ------------------------------------------------
+            # S3転送成功後のみ、
+            # 稲沢中継サーバ上の元Fileを削除する。
+            # ------------------------------------------------
+
             rm -f "${FILE}"
 
 
             if [ $? -eq 0 ]; then
 
-                log "Local file deleted: ${FILE_NAME}"
+                log "Local file deleted: ${FILE}"
 
                 SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
 
             else
 
-                # S3転送は成功したが、
-                # 中継サーバ上のファイル削除に失敗
+                # S3転送成功、Local削除失敗
                 log "ERROR: Local file deletion failed: ${FILE}"
 
                 ERROR_COUNT=$((ERROR_COUNT + 1))
@@ -355,13 +480,14 @@ do
             fi
 
 
-        # ----------------------------------------------------
-        # S3転送失敗
-        # ----------------------------------------------------
-
         else
 
-            # 転送失敗時は元ファイルを削除しない
+            # ------------------------------------------------
+            # S3転送失敗
+            #
+            # 稲沢中継サーバ上のFileは削除しない。
+            # ------------------------------------------------
+
             log "ERROR: Upload failed after ${MAX_RETRY} attempts: ${FILE_NAME}"
 
             log "Local file retained: ${FILE}"
@@ -376,9 +502,8 @@ do
 done < "${PREFIX_MAP}"
 
 
-
 # ============================================================
-# ⑨ 実行結果
+# ⑫ 実行結果
 # ============================================================
 
 log "=================================================="
@@ -387,15 +512,16 @@ log "Success files : ${SUCCESS_COUNT}"
 log "Error files   : ${ERROR_COUNT}"
 
 
-# 転送対象なし
 if [ ${TARGET_COUNT} -eq 0 ]; then
 
     log "No upload target files."
-
 fi
 
 
-# 1件以上エラーあり
+# ------------------------------------------------------------
+# 異常終了
+# ------------------------------------------------------------
+
 if [ ${ERROR_COUNT} -gt 0 ]; then
 
     log "Batch finished with errors."
@@ -405,7 +531,10 @@ if [ ${ERROR_COUNT} -gt 0 ]; then
 fi
 
 
+# ------------------------------------------------------------
 # 正常終了
+# ------------------------------------------------------------
+
 log "Batch finished successfully."
 log "=================================================="
 
