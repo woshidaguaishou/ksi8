@@ -1,70 +1,79 @@
-お疲れ様です。
-稲沢中継サーバ → データ利活用基盤S3 の転送バッチについて、現時点の設計方針として以下2ファイルを用意する想定です。
+# EventBridge・ネットワーク・リトライ・監視 詳細設計
 
-① johokei_s3_upload.sh
-S3転送を実行するメインのShell Scriptです。
+| No. | 分類 | 設計項目 | 設定値／設計内容 | 設定理由 | 設定タイミング |
+|---:|---|---|---|---|---|
+| 1 | EventBridge | 利用サービス | Amazon EventBridge Scheduler | 定期バッチ起動を目的とするため、EventBridge Schedulerを使用する。 | 【確定】 |
+| 2 | EventBridge | スケジュール名 | `<システム名>-data-import-schedule` | 用途を識別可能な名称とするため。 | 【要確認：命名規約】 |
+| 3 | EventBridge | スケジュール方式 | cron式 | 日次等の固定時刻による定期実行を行うため。 | 【確定】 |
+| 4 | EventBridge | 実行時刻 | `<運用側決定時刻>` | データ生成・転送完了時刻を考慮して実行する必要があるため。 | 【要確認】 |
+| 5 | EventBridge | タイムゾーン | `Asia/Tokyo` | 日本時間を基準として運用するため。 | 【確定】 |
+| 6 | EventBridge | Flexible Time Window | `OFF` | 指定した実行時刻から実行タイミングがずれることを防止するため。 | 【確定】 |
+| 7 | EventBridge | ステータス | `ENABLED` | 本番運用時に定期実行を有効化するため。 | 【確定】 |
+| 8 | EventBridge | ターゲット | データ取込用Lambda | S3上の対象データ確認および取込処理をLambdaで実行するため。 | 【確定】 |
+| 9 | EventBridge | ターゲットLambda ARN | `<Lambda Function ARN>` | Schedulerから対象Lambdaを特定して起動するため。 | **【★Lambda完成後】** |
+| 10 | EventBridge | Input Payload | `<Lambda仕様に合わせて決定>` | Lambda側で実行契機や処理種別を識別する必要がある場合に設定するため。不要な場合は空JSON等とする。 | **【★Lambda完成後】** |
+| 11 | IAM | Scheduler実行Role | `<Scheduler Role ARN>` | EventBridge SchedulerからLambdaを起動するため。 | **【★Lambda完成後】** |
+| 12 | IAM | Scheduler Role権限 | `lambda:InvokeFunction` | Schedulerに必要なLambda呼び出し権限のみを付与し、最小権限とするため。Resourceは対象Lambda ARNに限定する。 | **【★Lambda完成後】** |
+| 13 | Retry | Scheduler Retry | 有効 | Lambda呼び出し自体が一時的に失敗した場合に再試行するため。 | 【確定】 |
+| 14 | Retry | Scheduler最大再試行回数 | `3回` | 一時的なInvoke失敗を救済しつつ、過度な再試行を防止するため。 | 【確定：推奨値】 |
+| 15 | Retry | Scheduler最大イベント保持時間 | `15分` | 古いイベントが長時間後に実行され、後続バッチと重複することを防止するため。 | 【確定：推奨値】 |
+| 16 | Retry | Scheduler DLQ | 原則設定なし | 元データはS3上に保持され、後続実行または手動再実行による回収が可能なため。イベント保存要件がある場合のみ追加する。 | 【要確認】 |
+| 17 | Retry | AWSサービス側Retry対象 | EventBridge SchedulerからLambdaへの呼び出し失敗 | Lambdaが起動される前の障害はLambda処理内では制御できないため、Scheduler側で対応する。 | 【確定】 |
+| 18 | Retry | Lambda起動後のRetry | Lambda詳細設計にて定義 | S3アクセス等、Lambda起動後に発生する処理エラーはLambda側で処理内容に応じて制御するため。 | **【★Lambda設計側】** |
+| 19 | Retry | Retry責任範囲 | `Scheduler：Lambda起動失敗` / `Lambda：起動後の処理失敗` | AWSサービス側とLambda側でRetry責任範囲を分離し、多重Retryを防止するため。 | 【確定】 |
+| 20 | Network | EventBridge → Lambda | AWSマネージドサービス間通信 | EventBridge SchedulerからLambdaへの起動はユーザVPC内のネットワーク経路を使用しないため。 | 【確定】 |
+| 21 | Network | Lambda → S3 プロトコル | HTTPS | AWS API通信をTLSにより暗号化するため。 | 【確定】 |
+| 22 | Network | Lambda → S3 ポート | TCP/443 | Amazon S3 APIへのHTTPS通信に使用するため。 | 【確定】 |
+| 23 | Network | Lambda VPC接続 | `<VPC接続有無>` | Lambdaの最終構成によりS3へのネットワーク経路が異なるため。 | **【★Lambda完成後】** |
+| 24 | Network | Lambda VPC非接続時 | AWSサービスエンドポイント経由でS3へアクセス | S3等のAWSサービスのみを利用する場合、LambdaをユーザVPCへ接続する必要がないため。 | **【★Lambda完成後：VPC非接続時】** |
+| 25 | Network | Lambda VPC接続時 | S3 Gateway VPC Endpoint経由を推奨 | NAT Gateway／Internet Gatewayを経由せずS3へアクセス可能とするため。 | **【★Lambda完成後：VPC接続時】** |
+| 26 | Network | S3 VPC Endpoint ID | `<vpce-xxxxxxxx>` | VPC接続Lambdaの場合に使用するS3 Gateway VPC Endpointを特定するため。 | **【★Lambda完成後：VPC接続時のみ】** |
+| 27 | Network | Lambda Subnet | `<Subnet ID>` | LambdaをVPC接続する場合にENIを配置するSubnetを明確化するため。 | **【★Lambda完成後：VPC接続時のみ】** |
+| 28 | Network | Lambda Security Group | `<Security Group ID>` | LambdaをVPC接続する場合の通信制御設定を明確化するため。 | **【★Lambda完成後：VPC接続時のみ】** |
+| 29 | Network | クロスアカウントS3アクセス | IAM Role / Bucket Policy / 必要に応じKMS Key Policy | AWSアカウント間のS3アクセスはネットワーク接続ではなくAWS権限制御によって実現するため。 | **【★Lambda完成後】** |
+| 30 | Logging | ログ出力先 | Amazon CloudWatch Logs | Lambda処理で発生したエラー情報を一元管理し、障害調査を可能とするため。 | 【確定】 |
+| 31 | Logging | Log Group | `/aws/lambda/<FunctionName>` | Lambda標準のロググループを使用するため。 | **【★Lambda完成後】** |
+| 32 | Logging | Log Retention | `90日`を推奨 | 障害発生後の調査期間を確保しつつ、不要な長期保存を避けるため。既存のログ保持基準がある場合はそちらを優先する。 | 【要確認】 |
+| 33 | Logging | アプリケーションログレベル | `ERRORのみ` | 正常実行状況はCloudWatch Metricsで確認可能なため、障害調査に必要なエラー情報のみログ出力する。 | 【確定】 |
+| 34 | Logging | ERRORログ出力内容 | 処理日時、Request ID、対象ファイル／対象データ、エラーコード、エラーメッセージ | 障害発生時に対象処理および原因を特定可能とするため。 | **【★Lambda実装時】** |
+| 35 | IAM | CloudWatch Logs権限 | `logs:CreateLogGroup` / `logs:CreateLogStream` / `logs:PutLogEvents` | LambdaからCloudWatch Logsへログを出力するため。 | **【★Lambda完成後】** |
+| 36 | Monitoring | Scheduler監視 | CloudWatch Metrics `TargetErrorCount` | EventBridge SchedulerからLambdaへのターゲット呼び出し失敗を検知するため。 | 【確定】 |
+| 37 | Monitoring | TargetErrorCount Alarm | `>= 1` | 定期バッチの起動失敗は1回でも運用確認対象とするため。 | 【確定】 |
+| 38 | Monitoring | Scheduler監視 | CloudWatch Metrics `InvocationDroppedCount` | Retry上限到達後にイベントが破棄されたことを検知するため。 | 【確定】 |
+| 39 | Monitoring | InvocationDroppedCount Alarm | `>= 1` | Lambda自体が起動されなかった可能性があるため、1回以上を異常とする。 | 【確定】 |
+| 40 | Monitoring | Scheduler監視 | CloudWatch Metrics `TargetErrorThrottledCount` | Lambda呼び出し時のThrottle発生を検知するため。 | 【確定】 |
+| 41 | Monitoring | TargetErrorThrottledCount Alarm | `>= 1` | 通常の定期バッチではThrottleを想定しないため、1回以上を確認対象とする。 | 【確定】 |
+| 42 | Monitoring | Lambda監視 | CloudWatch Metrics `Errors` | Lambda関数自体の実行エラーを検知するため。 | **【★Lambda完成後：FunctionName指定】** |
+| 43 | Monitoring | Lambda Errors Alarm | `>= 1` | 定期データ取込処理で1回でもFunction Errorが発生した場合は確認対象とするため。 | 【確定】 |
+| 44 | Monitoring | Lambda監視 | CloudWatch Metrics `Throttles` | Lambda同時実行数等の制限による実行拒否を検知するため。 | **【★Lambda完成後：FunctionName指定】** |
+| 45 | Monitoring | Lambda Throttles Alarm | `>= 1` | 通常運用ではThrottleを想定しないため、1回以上を異常として扱う。 | 【確定】 |
+| 46 | Monitoring | Lambda監視 | CloudWatch Metrics `Duration` | Lambdaの処理時間増大およびTimeout接近を検知するため。 | **【★Lambda完成後】** |
+| 47 | Monitoring | Duration Alarm閾値 | `Lambda Timeoutの80～90%を目安に設定` | Timeout値および実際の通常処理時間はLambda実装・性能確認後に確定するため。 | **【★Lambda完成後・性能確認後】** |
+| 48 | Monitoring | 業務エラー監視 | CloudWatch Logs Metric Filter | Lambda自体が正常終了した場合でも、Lambda内でERRORログが出力された業務処理エラーを検知するため。 | 【確定】 |
+| 49 | Monitoring | Metric Filter Pattern | `<ERRORログ形式に合わせて設定>` | Lambda実装時に確定するログフォーマットに合わせてFilter条件を設定する必要があるため。 | **【★Lambda完成後】** |
+| 50 | Monitoring | Custom Metric名 | `DataImportErrorCount` | Lambda内の業務処理エラーをCloudWatch Alarmで監視可能とするため。 | 【確定】 |
+| 51 | Monitoring | DataImportErrorCount Alarm | `>= 1` | 1件でもデータ取込処理エラーが発生した場合は確認対象とするため。 | 【確定】 |
+| 52 | Monitoring | Alarm通知先 | `<既存監視／通知方式>` | SNS、メール、既存監視基盤等、プロジェクト共通の運用方式に合わせる必要があるため。 | 【要確認】 |
+| 53 | Monitoring | CloudWatch Dashboard | 任意 | AlarmおよびCloudWatch Logsで監視可能なため必須とはしない。運用上の可視化要件がある場合のみ追加する。 | 【要確認】 |
 
-主な処理内容は以下を想定しています。
-・稲沢中継サーバ上の対象ファイルを取得
-・prefix_map.conf を参照して格納先S3プレフィックスを判定
-・AWS CLI（aws s3 cp）を使用してS3へ転送
-・転送失敗時は最大3回Retry
-・転送成功時のみ稲沢中継サーバ上の対象ファイルを削除
-・転送失敗時は元ファイルを残す
-・実行結果をログ出力
-・flock による二重起動防止
+## Lambda実装完了後に反映する項目
 
-転送先Bucketについては、以下を設定済みとする想定です。
-
-s3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw
-
-② prefix_map.conf
-稲沢中継サーバ上の格納ディレクトリと、S3側の既存プレフィックスとの対応を定義する設定ファイルです。
-
-例えば、以下のように定義します。
-
-P01060_AG|P01060_AG
-P01060_AH|P01060_AH
-
-この場合、
-
-/data/johokei/P01060_AG/P01060.csv
-→ s3://...johokei-raw/P01060_AG/P01060.csv
-
-/data/johokei/P01060_AH/P01060.csv
-→ s3://...johokei-raw/P01060_AH/P01060.csv
-
-のように転送します。
-
-この方式にすることで、同一ファイル名（例：P01060.csv）であっても、中継サーバ上の格納ディレクトリによって転送先プレフィックスを区別できます。
-
-こちら側で設計・用意する範囲としては、以下を想定しています。
-
-・S3転送バッチの処理ロジック
-・転送先Bucketの指定
-・ローカルディレクトリとS3プレフィックスのMapping方式
-・Retry処理
-・正常／異常終了処理
-・転送成功後のファイル削除処理
-・ログ出力
-・二重起動防止
-・prefix_map.conf の形式および設定例
-
-一方、実機環境に依存するため、実機担当側で設定・確認いただきたい範囲は以下を想定しています。
-
-・稲沢中継サーバ上の実際のデータ格納ルートディレクトリ
-・各データをどのローカルディレクトリへ配置するか
-・Shell Script／設定ファイルの実際の配置先
-・ログ出力先
-・cronの具体的な実行時刻
-・バッチ実行OSユーザーおよびファイル／ディレクトリ権限
-・AWS CLI v2のインストールおよびPATH設定
-・AWS CLIからS3へアクセスするための認証／権限設定
-・S3へのHTTPS（443）通信可否
-
-なお、本バッチでは 「中継サーバ上のディレクトリで転送先プレフィックスを識別する」 方式を前提としています。
-そのため、P01060_AG と P01060_AH のようにファイル名が同一となるデータについては、稲沢中継サーバへ格納する時点で別ディレクトリに分けていただく想定です。
-
-もし実機側の仕様上、上記のようなディレクトリ分離が難しい場合は、ファイル判定ロジックを変更する必要があるため、その点のみ事前にご連携いただければと思います。
-
-上記の認識で問題なければ、こちらではこの前提でShell Scriptおよび設定ファイルを詰めていきます。
+| 項目 | 反映内容 |
+|---|---|
+| Lambda Function Name | 実際に作成したFunction Nameを反映 |
+| Lambda Function ARN | EventBridge SchedulerのTarget ARNとして反映 |
+| Scheduler Role ARN | SchedulerからLambdaをInvokeするRole ARNを反映 |
+| Lambda Execution Role ARN | S3／CloudWatch Logs等へのアクセスRoleを反映 |
+| Input Payload | Lambdaの入力仕様に合わせて確定 |
+| Lambda Timeout | 実装および性能確認結果を基に確定 |
+| Lambda Memory Size | 実装および性能確認結果を基に確定 |
+| VPC接続有無 | 最終Lambda構成に合わせて確定 |
+| Subnet ID | VPC接続時のみ反映 |
+| Security Group ID | VPC接続時のみ反映 |
+| S3 Gateway VPC Endpoint ID | VPC接続時のみ反映 |
+| S3 Bucket Policy / IAM Policy | 実際のLambda Role ARNおよび対象Bucketを反映 |
+| KMS Key Policy | SSE-KMS使用時のみ実際のRole ARNを反映 |
+| CloudWatch Log Group | `/aws/lambda/<FunctionName>` を反映 |
+| ERRORログ形式 | Lambda実装時の実際のログフォーマットを反映 |
+| Metric Filter Pattern | 実際のERRORログ形式に合わせて確定 |
+| Duration Alarm閾値 | Lambda Timeoutおよび通常処理時間の実測結果を基に確定 |
