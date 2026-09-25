@@ -1,100 +1,66 @@
 お疲れ様です。
-情報系データのデータ連携バッチについて、現時点の要件を反映し、以下の構成で作成しています。
+情報系データ連携用Shellについて、現時点の確定内容を反映した構成を以下の通り整理します。
 
 今回は以下の3ファイルを使用します。
 
 ① johokei_sftp_pull.sh
-データ元サーバから稲沢中継サーバへ、SFTPで対象ファイルを取得するShell Scriptです。
+データ元サーバから稲沢中継サーバへ、SFTPで対象ファイルを取得するShellです。
 
 ② johokei_s3_upload.sh
-稲沢中継サーバに取得したファイルを、AWS CLIを使用してデータ利活用基盤S3へ転送するShell Scriptです。
+稲沢中継サーバに取得したファイルを、AWS CLIを使用してデータ利活用基盤S3へ転送するShellです。
 
 ③ transfer_map.conf
-データ元サーバの接続情報、対象ファイル、およびS3格納先Prefixの対応関係を管理する設定ファイルです。
+データ元サーバの接続先、取得対象ファイル、S3格納先Prefixの対応を定義する設定ファイルです。
 
-処理全体としては、以下の流れとなります。
+処理の流れは以下となります。
 
 データ元サーバ → SFTP → 稲沢中継サーバ → AWS CLI → S3
 
 通常運用では、実機担当者は johokei_sftp_pull.sh のみを手動実行します。
 
-johokei_sftp_pull.sh では、transfer_map.conf を参照し、各データ元サーバから対象の csv.gz ファイルをSFTPで取得します。
+johokei_sftp_pull.sh では、transfer_map.conf を参照し、各データ元サーバから対象の csv.gz ファイルを取得します。
 
-ファイル名は、例えば以下の形式を想定しています。
-
-AG_保守契約情報_001.csv.gz
-AG_保守契約情報_002.csv.gz
+SFTP接続については、公開鍵認証を前提としています。
+Shell内にパスワードは保持せず、稲沢中継サーバのShell実行ユーザーから、パスワード入力なしでSFTP接続可能な状態とします。
 
 SFTP取得が正常終了したことを確認した後、データ元サーバ上の取得済みファイルを削除します。
 SFTP取得に失敗した場合は、データ元サーバ上のファイルは削除しません。
 
-すべてのSFTP取得が正常終了すると、稲沢中継サーバ上に .PULL_COMPLETE を作成し、後続の johokei_s3_upload.sh を自動実行します。
+全対象データのSFTP取得が正常終了すると、稲沢中継サーバ上に .PULL_COMPLETE を作成し、後続の johokei_s3_upload.sh を自動実行します。
 
-johokei_s3_upload.sh は .PULL_COMPLETE が存在する場合のみ実行可能とし、前段のSFTP取得処理が完了していない状態でS3側の処理が実行されないようにしています。
+johokei_s3_upload.sh は .PULL_COMPLETE が存在する場合のみS3転送を実施するため、前段処理が未完了の状態でS3側の処理が実行されない構成としています。
 
 S3転送先Bucketは以下です。
 
 s3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw
 
-格納先Prefixについては、transfer_map.conf に設定した S3_PREFIX を使用し、「自由検索テーブル一覧」の プレフィックス(Raw) と対応させます。
+S3格納先Prefixは、「自由検索テーブル一覧」の プレフィックス(Raw) をもとに transfer_map.conf へ設定します。
 
-例：
-
-AG_保守契約情報_001.csv.gz
-→ P01060_AG/
-
-AH_昇降機保守契約情報_001.csv.gz
-→ P01060_AH/
-
-S3への転送時は、対象Tableの新しいファイルが稲沢中継サーバ上に存在することを確認した後、対象Prefix内の旧 csv.gz ファイルを削除し、新しいファイルをUploadします。
+S3転送時は、対象の新規ファイルが中継サーバ上に存在することを確認した後、対象Prefix内の旧 csv.gz ファイルを削除し、新しいファイルをUploadします。
 
 Upload失敗時は最大3回までRetryします。
+S3 Uploadが正常終了したファイルについては、稲沢中継サーバ上の対象ファイルを削除します。
+Uploadに失敗した場合は、中継サーバ上のファイルを保持します。
 
-S3へのUploadが正常終了したファイルについては、稲沢中継サーバ上の対象ファイルを削除します。
-Uploadに失敗した場合は、中継サーバ上のファイルを削除せず保持します。
+全対象データのS3転送が正常終了した場合のみ、Bucket直下へ _COMPLETE を作成します。
+その後、稲沢中継サーバ側の .PULL_COMPLETE を削除し、一連の処理を正常終了とします。
 
-また、1件でも処理エラーが発生した場合は、処理完了Markerである _COMPLETE を作成しません。
+ログについては、各Shellの配置ディレクトリ配下に log ディレクトリを自動作成し、実行単位で保存します。
+また、flock により二重起動を防止します。
 
-全Table・全ファイルのS3転送が正常終了した場合のみ、Bucket直下へ以下を作成します。
+実機側で設定・準備いただく内容は以下です。
 
-_COMPLETE
-
-その後、稲沢中継サーバ側の .PULL_COMPLETE を削除し、一連のデータ連携処理を正常終了とします。
-
-ログについては、各Shell Scriptの配置ディレクトリ配下に log ディレクトリを自動作成し、実行単位で保存します。
-
-また、flock を使用して二重起動を防止します。
-
-実機側で設定いただく内容は、主に以下となります。
-
-・稲沢中継サーバ上のデータ格納先Directory
+・Shellおよび transfer_map.conf の配置先
+・稲沢中継サーバ上のデータ格納先ディレクトリ
 ・各データ元サーバのSFTP User / Host / Port / Remote Directory
-・SFTP接続用の認証設定
+・SFTP公開鍵認証の設定
 ・AWS CLIのInstallおよび認証設定
 ・使用するAWS CLI Profile名
-・必要に応じたKMS Key IDの設定
 
-一方、以下については当社側の設計値として設定します。
+SFTP公開鍵認証については、稲沢中継サーバ側のShell実行ユーザーで秘密鍵を保持し、接続先サーバ側へ対応する公開鍵を登録する想定です。
 
-・対象ファイルとS3 PrefixのMapping
-・転送先S3 Bucket
-・Retry処理
-・前後バッチの連携制御
-・正常／異常終了処理
-・旧S3ファイル削除処理
-・_COMPLETE / .PULL_COMPLETE による処理状態管理
+AWS認証情報についてもShell内には保持せず、AWS CLI側の認証設定を使用します。
 
-AWS認証については、Shell Script内にAccess Key / Secret Access Keyを直接保持せず、AWS CLI側の認証設定を利用します。
+AWS側については、対象BucketへのS3アクセス権限およびSSE-KMS利用に必要なIAM / KMS権限を設定します。
 
-また、対象BucketはSSE-KMSを使用しているため、AWS側ではS3アクセス権限に加えて、対象KMS Keyを利用するためのIAM / KMS権限設定が必要です。
-
-現時点では、バッチ実行Identityに対して以下の権限を想定しています。
-
-s3:ListBucket
-s3:PutObject
-s3:DeleteObject
-s3:AbortMultipartUpload
-
-KMSについては、対象KeyおよびKey Policyの内容を確認したうえで必要権限を最終確定します。
-
-以上の構成により、通常運用では johokei_sftp_pull.sh を1回手動実行することで、Source Serverからの取得からS3格納までを一連の処理として実行できる構成としています。
+以上の構成により、通常運用では johokei_sftp_pull.sh を1回手動実行することで、データ元サーバからの取得からS3格納までを一連の処理として実行できる構成としています。
