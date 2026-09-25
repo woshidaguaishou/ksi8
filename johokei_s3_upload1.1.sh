@@ -3,114 +3,67 @@
 # ============================================================
 # 情報系データ S3転送バッチ
 #
-# 【概要】
-# 稲沢中継サーバに格納された情報系データを
-# AWS CLIを使用してデータ利活用基盤S3へ転送する。
+# 本Scriptは johokei_sftp_pull.sh の後続処理として実行する。
 #
-# 【処理】
-# 1. Mapping File読込
-# 2. 転送対象ファイル存在確認
-# 3. 対象S3 Prefixの既存ファイル削除
-# 4. 対象ファイルをS3へ転送
-# 5. 転送成功後、中継サーバ上の元ファイル削除
-# 6. 全Table正常終了後、_COMPLETEをS3へ格納
-#
-# 【異常時】
-# ・S3 Uploadは最大3回Retry
-# ・Upload失敗時は元ファイルを削除しない
-# ・1件でも失敗した場合は_COMPLETEを作成しない
-#
-# 【実行方式】
-# 手動実行
-#
-# 【認証】
-# AWS CLI共通IAM Userを使用
-# Access Key / Secret Access Keyは本Scriptに記載しない
+# .PULL_COMPLETE が存在しない場合は、
+# S3転送を実施しない。
 #
 # ============================================================
 
 set -u
+shopt -s nullglob
 
 
 # ============================================================
-# ① AWS設定
+# ① 引数
 # ============================================================
 
-# 【確定】
+if [ $# -ne 1 ]; then
+
+    echo "Usage:"
+    echo "  $0 <STAGING_ROOT>"
+
+    exit 1
+fi
+
+
+STAGING_ROOT="$1"
+
+
+# ============================================================
+# ② AWS設定
+# ============================================================
+
 S3_BUCKET="s3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw"
 
 
-# 【IAM設定後に変更】
-# AWS CLI Profile名
-# Default Profileを使用する場合は空欄
+# 【IAM/KMS設計確定後】
 AWS_PROFILE_NAME=""
 
-
-# 【KMS設計確定後】
-# Bucket Default Encryption(SSE-KMS)を利用する場合は空欄
-#
-# CLIからKMS Keyを明示指定する場合のみ
-# KMS Key ARNを設定
-#
-# 例：
-# KMS_KEY_ID="arn:aws:kms:ap-northeast-1:123456789012:key/xxxx"
 KMS_KEY_ID=""
-
-
-# ============================================================
-# ② 実機環境設定
-# ============================================================
-
-# 【実機担当設定】
-# 稲沢中継サーバ上の情報系データ格納Directory
-#
-# 例：
-# SOURCE_DIR="/data/export"
-#
-SOURCE_DIR="/PLEASE/SET/SOURCE/DIRECTORY"
 
 
 # ============================================================
 # ③ Script設定
 # ============================================================
 
-# Script自身の配置Directory
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
+TRANSFER_MAP="${SCRIPT_DIR}/transfer_map.conf"
 
-# Mapping File
-FILE_MAP="${SCRIPT_DIR}/file_map.conf"
-
-
-# Log Directory
 LOG_DIR="${SCRIPT_DIR}/log"
-
-
-# Retry回数
-MAX_RETRY=3
-
-
-# Retry間隔（秒）
-RETRY_INTERVAL=60
-
-
-# 二重起動防止File
-LOCK_FILE="/tmp/johokei_s3_upload.lock"
-
-
-# 対象ファイル無しの場合のglob対策
-shopt -s nullglob
-
-
-# ============================================================
-# ④ Log初期化
-# ============================================================
-
-TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
 mkdir -p "${LOG_DIR}"
 
+TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+
 LOG_FILE="${LOG_DIR}/johokei_s3_upload_${TIMESTAMP}.log"
+
+LOCK_FILE="/tmp/johokei_s3_upload.lock"
+
+MAX_RETRY=3
+
+RETRY_INTERVAL=60
 
 
 log()
@@ -120,21 +73,36 @@ log()
 
 
 # ============================================================
-# ⑤ 二重起動防止
+# ④ 二重起動防止
 # ============================================================
 
 exec 200>"${LOCK_FILE}"
 
 if ! flock -n 200; then
 
-    log "ERROR: Batch is already running."
+    log "ERROR: S3 Upload Batch is already running."
 
     exit 2
 fi
 
 
 # ============================================================
-# ⑥ AWS CLI Profile
+# ⑤ 前段処理完了確認
+#
+# ここが2つのScriptの連携ポイント
+# ============================================================
+
+if [ ! -f "${STAGING_ROOT}/.PULL_COMPLETE" ]; then
+
+    log "ERROR: .PULL_COMPLETE not found."
+    log "SFTP Pull Batch has not completed successfully."
+
+    exit 1
+fi
+
+
+# ============================================================
+# ⑥ AWS Profile
 # ============================================================
 
 if [ -n "${AWS_PROFILE_NAME}" ]; then
@@ -143,22 +111,9 @@ fi
 
 
 # ============================================================
-# ⑦ 開始
+# ⑦ 事前Check
 # ============================================================
 
-log "=================================================="
-log "情報系 S3 Upload Batch Start"
-log "SOURCE_DIR : ${SOURCE_DIR}"
-log "S3_BUCKET  : ${S3_BUCKET}"
-log "FILE_MAP   : ${FILE_MAP}"
-log "=================================================="
-
-
-# ============================================================
-# ⑧ 事前Check
-# ============================================================
-
-# AWS CLI
 if ! command -v aws >/dev/null 2>&1; then
 
     log "ERROR: AWS CLI is not installed."
@@ -167,8 +122,8 @@ if ! command -v aws >/dev/null 2>&1; then
 fi
 
 
-# AWS認証
-if ! aws sts get-caller-identity >>"${LOG_FILE}" 2>&1; then
+if ! aws sts get-caller-identity \
+    >> "${LOG_FILE}" 2>&1; then
 
     log "ERROR: AWS authentication failed."
 
@@ -176,26 +131,16 @@ if ! aws sts get-caller-identity >>"${LOG_FILE}" 2>&1; then
 fi
 
 
-# Source Directory
-if [ ! -d "${SOURCE_DIR}" ]; then
+if [ ! -f "${TRANSFER_MAP}" ]; then
 
-    log "ERROR: Source directory does not exist: ${SOURCE_DIR}"
-
-    exit 1
-fi
-
-
-# Mapping File
-if [ ! -f "${FILE_MAP}" ]; then
-
-    log "ERROR: Mapping file does not exist: ${FILE_MAP}"
+    log "ERROR: transfer_map.conf not found."
 
     exit 1
 fi
 
 
 # ============================================================
-# ⑨ AWS CLI Option
+# ⑧ AWS CLI Option
 # ============================================================
 
 AWS_CP_OPTIONS=(
@@ -203,7 +148,6 @@ AWS_CP_OPTIONS=(
 )
 
 
-# KMS KeyをCLIから明示指定する場合
 if [ -n "${KMS_KEY_ID}" ]; then
 
     AWS_CP_OPTIONS+=(
@@ -215,43 +159,64 @@ fi
 
 
 # ============================================================
-# ⑩ 件数
+# ⑨ 前回_COMPLETE削除
+#
+# 新しい転送処理中に前回の_COMPLETEが残らないようにする
 # ============================================================
 
-TARGET_COUNT=0
-SUCCESS_COUNT=0
+log "Removing previous _COMPLETE marker."
+
+
+aws s3 rm \
+    "${S3_BUCKET}/_COMPLETE" \
+    --only-show-errors \
+    >> "${LOG_FILE}" 2>&1
+
+
+# ============================================================
+# ⑩ 初期化
+# ============================================================
+
 ERROR_COUNT=0
 TABLE_COUNT=0
+FILE_COUNT=0
 
 
 # ============================================================
-# ⑪ Mapping単位処理
+# ⑪ Table単位処理
 # ============================================================
 
-while IFS='|' read -r FILE_NAME_PREFIX S3_PREFIX
+while IFS='|' read -r \
+    ENABLE \
+    SOURCE_USER \
+    SOURCE_HOST \
+    SOURCE_PORT \
+    REMOTE_DIR \
+    FILE_NAME_PREFIX \
+    S3_PREFIX
 do
 
-    # Windows CRLF対策
-    FILE_NAME_PREFIX="${FILE_NAME_PREFIX//$'\r'/}"
+    ENABLE="${ENABLE//$'\r'/}"
     S3_PREFIX="${S3_PREFIX//$'\r'/}"
 
 
-    # 空行
-    [ -z "${FILE_NAME_PREFIX}" ] && continue
+    [ -z "${ENABLE}" ] && continue
 
 
-    # Comment
-    case "${FILE_NAME_PREFIX}" in
+    case "${ENABLE}" in
         \#*)
             continue
             ;;
     esac
 
 
-    # Mapping Check
-    if [ -z "${S3_PREFIX}" ]; then
+    [ "${ENABLE}" != "Y" ] && continue
 
-        log "ERROR: S3 Prefix is not defined: ${FILE_NAME_PREFIX}"
+
+    # Prefix安全Check
+    if [[ ! "${S3_PREFIX}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+
+        log "ERROR: Invalid S3 Prefix: ${S3_PREFIX}"
 
         ERROR_COUNT=$((ERROR_COUNT + 1))
 
@@ -259,30 +224,21 @@ do
     fi
 
 
-    # --------------------------------------------------------
-    # 対象ファイル取得
-    #
-    # 例：
-    #
-    # AG_保守契約情報_001.csv.gz
-    # AG_保守契約情報_002.csv.gz
-    #
-    # --------------------------------------------------------
+    LOCAL_DIR="${STAGING_ROOT}/${S3_PREFIX}"
+
+    S3_URI="${S3_BUCKET}/${S3_PREFIX}/"
+
 
     FILES=(
-        "${SOURCE_DIR}/${FILE_NAME_PREFIX}_"*.csv.gz
+        "${LOCAL_DIR}/${FILE_NAME_PREFIX}_"*.csv.gz
     )
 
 
-    # 当該TableのFileが無い場合は処理しない
-    #
-    # 重要：
-    # Fileが無い状態でS3既存Fileを削除しないため、
-    # S3削除より先に存在確認する。
-    #
     if [ ${#FILES[@]} -eq 0 ]; then
 
-        log "INFO: No target files: ${FILE_NAME_PREFIX}"
+        log "ERROR: Target file not found: ${FILE_NAME_PREFIX}"
+
+        ERROR_COUNT=$((ERROR_COUNT + 1))
 
         continue
     fi
@@ -290,69 +246,58 @@ do
 
     TABLE_COUNT=$((TABLE_COUNT + 1))
 
-    S3_URI="${S3_BUCKET}/${S3_PREFIX}/"
-
 
     log "--------------------------------------------------"
-    log "Table       : ${FILE_NAME_PREFIX}"
-    log "S3 Prefix   : ${S3_PREFIX}"
-    log "File Count  : ${#FILES[@]}"
+    log "Table      : ${FILE_NAME_PREFIX}"
+    log "S3 Prefix  : ${S3_PREFIX}"
+    log "File Count : ${#FILES[@]}"
 
 
     # ========================================================
-    # ⑫ S3既存File削除
+    # S3旧File削除
     #
-    # Customer Requirement:
+    # CSV.GZのみ削除
     #
-    # 新しい月次Fileを格納する前に、
-    # 対象Prefix内の前月Fileを削除する。
-    #
+    # 他のObjectを誤って削除しない
     # ========================================================
 
-    log "Delete old S3 objects: ${S3_URI}"
+    log "Deleting previous files from: ${S3_URI}"
 
 
     if ! aws s3 rm \
         "${S3_URI}" \
         --recursive \
+        --exclude "*" \
+        --include "*.csv.gz" \
         --only-show-errors \
-        >>"${LOG_FILE}" 2>&1
+        >> "${LOG_FILE}" 2>&1
     then
 
-        log "ERROR: Failed to delete existing S3 objects: ${S3_URI}"
+        log "ERROR: Failed to delete previous S3 files."
 
         ERROR_COUNT=$((ERROR_COUNT + 1))
 
-        # 削除失敗時は新規FileをUploadしない
         continue
     fi
 
 
-    log "Old S3 objects deleted."
-
-
     # ========================================================
-    # ⑬ File単位Upload
+    # 新File Upload
     # ========================================================
+
+    TABLE_UPLOAD_SUCCESS=1
+
 
     for FILE in "${FILES[@]}"
     do
 
-        TARGET_COUNT=$((TARGET_COUNT + 1))
-
         FILE_NAME=$(basename "${FILE}")
 
-        log "Upload Start : ${FILE_NAME}"
-        log "Destination  : ${S3_URI}${FILE_NAME}"
+        FILE_COUNT=$((FILE_COUNT + 1))
 
-
-        UPLOAD_SUCCESS=0
         ATTEMPT=1
+        FILE_SUCCESS=0
 
-
-        # ====================================================
-        # Retry
-        # ====================================================
 
         while [ ${ATTEMPT} -le ${MAX_RETRY} ]
         do
@@ -364,30 +309,23 @@ do
                 "${FILE}" \
                 "${S3_URI}${FILE_NAME}" \
                 "${AWS_CP_OPTIONS[@]}" \
-                >>"${LOG_FILE}" 2>&1
+                >> "${LOG_FILE}" 2>&1
 
 
-            AWS_EXIT_CODE=$?
+            if [ $? -eq 0 ]; then
 
+                FILE_SUCCESS=1
 
-            if [ ${AWS_EXIT_CODE} -eq 0 ]; then
-
-                UPLOAD_SUCCESS=1
-
-                log "Upload Success: ${FILE_NAME}"
+                log "Upload success: ${FILE_NAME}"
 
                 break
             fi
 
 
-            log "WARNING: Upload failed: ${FILE_NAME}, ExitCode=${AWS_EXIT_CODE}"
-
             ATTEMPT=$((ATTEMPT + 1))
 
 
             if [ ${ATTEMPT} -le ${MAX_RETRY} ]; then
-
-                log "Retry after ${RETRY_INTERVAL} seconds."
 
                 sleep "${RETRY_INTERVAL}"
 
@@ -396,100 +334,77 @@ do
         done
 
 
-        # ====================================================
-        # ⑭ Upload後処理
-        # ====================================================
+        if [ ${FILE_SUCCESS} -ne 1 ]; then
 
-        if [ ${UPLOAD_SUCCESS} -eq 1 ]; then
+            log "ERROR: Upload failed: ${FILE_NAME}"
 
-            # S3 Upload成功後のみ
-            # 中継サーバ上のFileを削除
-            if rm -f "${FILE}"; then
-
-                log "Local file deleted: ${FILE_NAME}"
-
-                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
-
-            else
-
-                log "ERROR: Local file deletion failed: ${FILE_NAME}"
-
-                ERROR_COUNT=$((ERROR_COUNT + 1))
-
-            fi
-
-        else
-
-            # Upload失敗時は元File保持
-            log "ERROR: Upload failed after ${MAX_RETRY} attempts: ${FILE_NAME}"
-
-            log "Local file retained: ${FILE_NAME}"
+            TABLE_UPLOAD_SUCCESS=0
 
             ERROR_COUNT=$((ERROR_COUNT + 1))
 
+            break
         fi
 
     done
 
 
-done < "${FILE_MAP}"
+    # ========================================================
+    # Table単位で全File成功した場合のみLocal File削除
+    # ========================================================
+
+    if [ ${TABLE_UPLOAD_SUCCESS} -eq 1 ]; then
+
+        for FILE in "${FILES[@]}"
+        do
+
+            rm -f "${FILE}"
+
+        done
+
+
+        log "Local files deleted: ${S3_PREFIX}"
+
+    else
+
+        log "Local files retained: ${S3_PREFIX}"
+
+    fi
+
+
+done < "${TRANSFER_MAP}"
 
 
 # ============================================================
-# ⑮ 結果判定
+# ⑫ Error判定
 # ============================================================
 
-log "=================================================="
-log "Processed Tables : ${TABLE_COUNT}"
-log "Target Files     : ${TARGET_COUNT}"
-log "Success Files    : ${SUCCESS_COUNT}"
-log "Error Files      : ${ERROR_COUNT}"
-log "=================================================="
-
-
-# 1件でもErrorがある場合
-#
-# _COMPLETEは作成しない
-#
 if [ ${ERROR_COUNT} -gt 0 ]; then
 
-    log "ERROR: Batch finished with errors."
+    log "=================================================="
+    log "ERROR: S3 Upload Batch failed."
     log "_COMPLETE will NOT be created."
+    log ".PULL_COMPLETE will be retained."
+    log "=================================================="
 
     exit 1
 fi
 
 
 # ============================================================
-# ⑯ _COMPLETE作成
-#
-# 全TableのS3格納が正常終了したことを示すMarker。
-#
-# Localに一時的な0Byte Fileを作成し、
-# Bucket RootへUploadする。
-#
+# ⑬ _COMPLETE
 # ============================================================
 
-COMPLETE_FILE="${SCRIPT_DIR}/_COMPLETE"
+COMPLETE_FILE="${STAGING_ROOT}/_COMPLETE"
 
 : > "${COMPLETE_FILE}"
 
 
-log "Creating completion marker: _COMPLETE"
-
-
-if aws s3 cp \
+if ! aws s3 cp \
     "${COMPLETE_FILE}" \
     "${S3_BUCKET}/_COMPLETE" \
     "${AWS_CP_OPTIONS[@]}" \
-    >>"${LOG_FILE}" 2>&1
+    >> "${LOG_FILE}" 2>&1
 then
-
-    log "_COMPLETE uploaded successfully."
-
-    rm -f "${COMPLETE_FILE}"
-
-else
 
     log "ERROR: Failed to upload _COMPLETE."
 
@@ -499,12 +414,23 @@ else
 fi
 
 
+rm -f "${COMPLETE_FILE}"
+
+
 # ============================================================
-# ⑰ 正常終了
+# ⑭ Pull Marker削除
+#
+# 前段・後段すべて正常終了したことを意味する
 # ============================================================
 
+rm -f "${STAGING_ROOT}/.PULL_COMPLETE"
+
+
 log "=================================================="
-log "Batch finished successfully."
+log "S3 Upload Batch completed successfully."
+log "Processed Tables : ${TABLE_COUNT}"
+log "Processed Files  : ${FILE_COUNT}"
+log "_COMPLETE created."
 log "=================================================="
 
 exit 0
