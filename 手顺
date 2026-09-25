@@ -1,0 +1,17 @@
+操作番号	実施内容	実機担当で設定する箇所	備考
+1	「johokei_sftp_pull.sh」「johokei_s3_upload.sh」「transfer_map.conf」の3ファイルを同一ディレクトリに配置する	配置先ディレクトリ	例：/opt/johokei-batch/
+2	2つのShell Scriptに実行権限を付与する	なし	chmod +x johokei_sftp_pull.sh johokei_s3_upload.sh
+3	稲沢中継サーバ上のデータ格納先を設定する	johokei_sftp_pull.sh の STAGING_ROOT	例：/data/johokei
+4	データ元サーバのSFTP接続情報を設定する	transfer_map.conf の SOURCE_USER、SOURCE_HOST、SOURCE_PORT、REMOTE_DIR	実際のサーバ情報に合わせて設定
+5	SFTP接続に必要な認証設定を行う	SSH Key等のSFTP認証設定	パスワード等はShell Script内に記載しない
+6	AWS CLIをインストールし、AWS認証情報を設定する	AWS CLI、AWS Profile	IAM認証情報はShell Script内に記載しない
+7	AWS CLI Profileを使用する場合、Profile名を設定する	johokei_s3_upload.sh の AWS_PROFILE_NAME	Default Profileを使用する場合は空欄でも可
+8	KMS KeyをCLI側から明示指定する必要がある場合のみ設定する	johokei_s3_upload.sh の KMS_KEY_ID	Bucket Default Encryptionを使用する場合は空欄
+9	SFTP接続およびAWS接続が正常に行えることを確認する	SFTP接続、aws sts get-caller-identity	実行前の疎通確認
+10	「johokei_sftp_pull.sh」を手動実行する	なし	通常運用では本Scriptのみ実行する
+11	Source Serverから稲沢中継サーバへのSFTP取得が自動実行される	なし	取得成功後にSource Server側の対象ファイルを削除
+12	SFTP取得が全件正常終了した場合、「johokei_s3_upload.sh」が自動実行される	なし	SFTP処理にエラーがある場合はS3転送を開始しない
+13	S3の対象Prefixにある旧CSV.GZファイルを削除し、新しいファイルをUploadする	なし	転送先はtransfer_map.confのS3_PREFIXを使用
+14	S3 Uploadが正常終了したファイルを稲沢中継サーバから削除する	なし	Upload失敗時は中継サーバ上のファイルを保持
+15	全データの処理が正常終了するとS3 Bucket直下に「_COMPLETE」が作成される	なし	_COMPLETEが全処理正常終了の確認ポイント
+16	実行後、logディレクトリおよびS3の「_COMPLETE」を確認する	なし	LogはScript配置ディレクトリ配下に自動作成
