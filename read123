@@ -1,196 +1,100 @@
 お疲れ様です。
-情報系データの「稲沢中継サーバ → データ利活用基盤S3」転送用バッチについて、現時点の要件を反映したスクリプトを作成しました。
+情報系データのデータ連携バッチについて、現時点の要件を反映し、以下の構成で作成しています。
 
-今回、以下の2ファイルを使用します。
+今回は以下の3ファイルを使用します。
 
-① johokei_s3_upload.sh
-S3への転送処理を実行するShell Scriptです。
+① johokei_sftp_pull.sh
+データ元サーバから稲沢中継サーバへ、SFTPで対象ファイルを取得するShell Scriptです。
 
-② file_map.conf
-中継サーバ上のファイル名とS3 Prefixの対応関係を定義するMapping Fileです。
-S3 Prefixについては、「自由検索テーブル一覧.xlsx」の「プレフィックス(Raw)」を基準に設定しています。
+② johokei_s3_upload.sh
+稲沢中継サーバに取得したファイルを、AWS CLIを使用してデータ利活用基盤S3へ転送するShell Scriptです。
 
-実行処理
+③ transfer_map.conf
+データ元サーバの接続情報、対象ファイル、およびS3格納先Prefixの対応関係を管理する設定ファイルです。
 
-johokei_s3_upload.sh を手動実行すると、以下の順序で処理します。
+処理全体としては、以下の流れとなります。
 
-file_map.conf を読み込み
-稲沢中継サーバ上の対象ファイルを検索
-対象ファイルが存在する場合、対応するS3 Prefixの既存ファイルを削除
-AWS CLIにより対象ファイルをS3へUpload
-Upload失敗時は最大3回Retry
-Upload成功後、中継サーバ上の転送済みファイルを削除
-全対象ファイルの処理が正常終了した場合、S3へ _COMPLETE を格納
+データ元サーバ → SFTP → 稲沢中継サーバ → AWS CLI → S3
 
-1件でも転送エラーが発生した場合は、対象の中継サーバ上のファイルは削除せず、_COMPLETE も作成しません。
+通常運用では、実機担当者は johokei_sftp_pull.sh のみを手動実行します。
 
-実機側で設定いただきたい箇所
+johokei_sftp_pull.sh では、transfer_map.conf を参照し、各データ元サーバから対象の csv.gz ファイルをSFTPで取得します。
 
-スクリプト内の以下の値については、中継サーバの実環境に合わせて設定をお願いいたします。
-
-# 稲沢中継サーバ上の情報系データ格納先
-SOURCE_DIR="/PLEASE/SET/SOURCE/DIRECTORY"
-
-例えば実際の格納先が /data/export の場合は、
-
-SOURCE_DIR="/data/export"
-
-と設定してください。
-
-また、AWS CLIの認証にProfileを使用する場合は、以下を設定してください。
-
-AWS_PROFILE_NAME=""
-
-Default Profileを使用する場合は空欄のままで問題ありません。
-
-AWS CLIについて
-
-本バッチはAWS CLIを使用するため、稲沢中継サーバへのAWS CLIのInstallおよび認証設定が必要です。
-
-Access Key / Secret Access KeyはShell Script内には記載しない構成としています。
-
-IAM Userおよび認証情報の払い出し後、中継サーバ側でAWS CLIの認証設定を実施してください。
-
-確認例：
-
-aws sts get-caller-identity
-
-正常にAccount/User情報が返却されれば、認証確認OKです。
-
-SSE-KMSについて
-
-対象S3 BucketはSSE-KMSを使用するため、KMS設定確定後に必要に応じて以下を設定します。
-
-KMS_KEY_ID=""
-
-Bucket側のDefault Encryptionを利用する構成の場合は、Script側でKMS Keyを明示指定する必要はないため、空欄のままとします。
-
-IAM Policyについては、S3へのUploadおよび既存ファイル削除を行うため、現時点では対象Bucketに対する以下の権限を想定しています。
-
-s3:PutObject
-s3:DeleteObject
-s3:ListBucket
-s3:AbortMultipartUpload
-kms:GenerateDataKey
-
-KMS関連権限については、最終的なKMS Key / Key Policyの設計に合わせて確定します。
-
-file_map.confについて
-
-以下の形式で、
-
-ファイル名Prefix|S3 Prefix
-
-を定義しています。
-
-例：
-
-AA_昇降機情報|P01010_AA
-AG_保守契約情報|P01060_AG
-AH_昇降機保守契約情報|P01060_AH
-Z_B42030_稲電オーダ情報|B42030
-
-例えば中継サーバに、
+ファイル名は、例えば以下の形式を想定しています。
 
 AG_保守契約情報_001.csv.gz
 AG_保守契約情報_002.csv.gz
 
-が存在する場合、
+SFTP取得が正常終了したことを確認した後、データ元サーバ上の取得済みファイルを削除します。
+SFTP取得に失敗した場合は、データ元サーバ上のファイルは削除しません。
 
-s3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw/P01060_AG/
+すべてのSFTP取得が正常終了すると、稲沢中継サーバ上に .PULL_COMPLETE を作成し、後続の johokei_s3_upload.sh を自動実行します。
 
-配下へ転送します。
+johokei_s3_upload.sh は .PULL_COMPLETE が存在する場合のみ実行可能とし、前段のSFTP取得処理が完了していない状態でS3側の処理が実行されないようにしています。
 
-Mappingについては「自由検索テーブル一覧.xlsx」の「プレフィックス(Raw)」を基準としているため、今後対象Tableが追加・変更された場合は、基本的に file_map.conf の追加・変更で対応可能です。
+S3転送先Bucketは以下です。
 
-なお、XAA_昇降機情報_蓄積 および XFL_出庫明細情報_蓄積 については、ご回答いただいた通りSourceデータがそれぞれ AA_昇降機情報、FL_出庫明細情報 と同一のため、転送元Mappingとしては対象外としています。
+s3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw
 
-実行方法
+格納先Prefixについては、transfer_map.conf に設定した S3_PREFIX を使用し、「自由検索テーブル一覧」の プレフィックス(Raw) と対応させます。
 
-2ファイルを同一Directoryへ配置してください。
+例：
 
-任意Directory/
-├── johokei_s3_upload.sh
-└── file_map.conf
+AG_保守契約情報_001.csv.gz
+→ P01060_AG/
 
-Shell Scriptへ実行権限を付与します。
+AH_昇降機保守契約情報_001.csv.gz
+→ P01060_AH/
 
-chmod +x johokei_s3_upload.sh
+S3への転送時は、対象Tableの新しいファイルが稲沢中継サーバ上に存在することを確認した後、対象Prefix内の旧 csv.gz ファイルを削除し、新しいファイルをUploadします。
 
-その後、以下で手動実行できます。
+Upload失敗時は最大3回までRetryします。
 
-./johokei_s3_upload.sh
+S3へのUploadが正常終了したファイルについては、稲沢中継サーバ上の対象ファイルを削除します。
+Uploadに失敗した場合は、中継サーバ上のファイルを削除せず保持します。
 
-LogについてはScriptと同じDirectory配下に自動的に log Directoryを作成し、
+また、1件でも処理エラーが発生した場合は、処理完了Markerである _COMPLETE を作成しません。
 
-log/johokei_s3_upload_YYYYMMDD_HHMMSS.log
+全Table・全ファイルのS3転送が正常終了した場合のみ、Bucket直下へ以下を作成します。
 
-の形式で出力します。
+_COMPLETE
 
-実機側で最終的に対応いただく内容
+その後、稲沢中継サーバ側の .PULL_COMPLETE を削除し、一連のデータ連携処理を正常終了とします。
 
-実機環境依存となるため、以下についてご対応をお願いいたします。
+ログについては、各Shell Scriptの配置ディレクトリ配下に log ディレクトリを自動作成し、実行単位で保存します。
 
-・AWS CLIのInstall
-・AWS CLI認証情報の設定
-・SOURCE_DIR の実環境値への変更
-・必要な場合は AWS_PROFILE_NAME の設定
-・Shell Scriptへの実行権限付与
-・実機上での単体試験
+また、flock を使用して二重起動を防止します。
 
-AWS側については、IAM PolicyおよびSSE-KMS関連設定をこちらで整理します。
+実機側で設定いただく内容は、主に以下となります。
 
-以上の前提で、実機側では主に「中継サーバの実際のDirectory・AWS CLI環境」を設定いただければ、バッチを実行できる形にしています。
+・稲沢中継サーバ上のデータ格納先Directory
+・各データ元サーバのSFTP User / Host / Port / Remote Directory
+・SFTP接続用の認証設定
+・AWS CLIのInstallおよび認証設定
+・使用するAWS CLI Profile名
+・必要に応じたKMS Key IDの設定
 
+一方、以下については当社側の設計値として設定します。
 
+・対象ファイルとS3 PrefixのMapping
+・転送先S3 Bucket
+・Retry処理
+・前後バッチの連携制御
+・正常／異常終了処理
+・旧S3ファイル削除処理
+・_COMPLETE / .PULL_COMPLETE による処理状態管理
 
-==========================
+AWS認証については、Shell Script内にAccess Key / Secret Access Keyを直接保持せず、AWS CLI側の認証設定を利用します。
 
+また、対象BucketはSSE-KMSを使用しているため、AWS側ではS3アクセス権限に加えて、対象KMS Keyを利用するためのIAM / KMS権限設定が必要です。
 
-AM認証について
-
-稲沢中継サーバからAWS CLIを使用してS3へファイルを転送するため、AWS側でS3転送用のIAM認証情報を用意する必要があります。
-
-今回のバッチでは、Access Key / Secret Access Key等の認証情報をShell Script内へ直接記載しない方針としています。
-
-AWS側で対応する内容
-
-・中継サーバからAWS CLIを実行するためのIAM認証方式の確定
-・必要なIAM User等の作成／払い出し
-・対象S3 Bucketへの必要最小限の権限付与
-・SSE-KMS利用に必要なKMS権限の付与
-・必要に応じてKMS Key Policy側の許可設定
-
-現在バッチ処理から必要になる権限としては、暫定的に以下を想定しています。
+現時点では、バッチ実行Identityに対して以下の権限を想定しています。
 
 s3:ListBucket
 s3:PutObject
 s3:DeleteObject
 s3:AbortMultipartUpload
-kms:GenerateDataKey
 
-※KMS権限については、使用するKMS KeyおよびKey Policy確認後に最終確定します。
+KMSについては、対象KeyおよびKey Policyの内容を確認したうえで必要権限を最終確定します。
 
-実機側で対応いただく内容
-
-AWS側で払い出された認証情報を稲沢中継サーバのAWS CLIへ設定してください。
-
-例：
-
-aws configure --profile johokei-s3-upload
-
-Profileを使用する場合は、Script内の以下の値へ設定したProfile名を指定します。
-
-AWS_PROFILE_NAME="johokei-s3-upload"
-
-設定後、以下で認証確認を行います。
-
-aws sts get-caller-identity --profile johokei-s3-upload
-
-正常に認証できれば、バッチから同じProfileを使用してS3転送を実行します。
-
-なお、IAMのAccess Key / Secret Access Key自体を johokei_s3_upload.sh や file_map.conf に記載する必要はありません。
-
-現時点の未確定事項
-
-IAM認証方式および実際に使用するIAM User／Profile名、KMS Key ARNについては、AWS側のIAM・KMS設計確定後に反映する想定です。
+以上の構成により、通常運用では johokei_sftp_pull.sh を1回手動実行することで、Source Serverからの取得からS3格納までを一連の処理として実行できる構成としています。
