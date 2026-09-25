@@ -15,3 +15,17 @@
 14	S3 Uploadが正常終了したファイルを稲沢中継サーバから削除する	なし	Upload失敗時は中継サーバ上のファイルを保持
 15	全データの処理が正常終了するとS3 Bucket直下に「_COMPLETE」が作成される	なし	_COMPLETEが全処理正常終了の確認ポイント
 16	実行後、logディレクトリおよびS3の「_COMPLETE」を確認する	なし	LogはScript配置ディレクトリ配下に自動作成
+
+
+
+
+対象ファイル	設定項目	実機担当で設定する内容	設定例
+johokei_sftp_pull.sh	STAGING_ROOT	稲沢中継サーバ上のデータ格納Root Directory	/data/johokei
+transfer_map.conf	SOURCE_USER	SFTP接続ユーザー	batchuser
+transfer_map.conf	SOURCE_HOST	データ元サーバのHost名またはIP	10.x.x.x
+transfer_map.conf	SOURCE_PORT	SFTP接続Port	22
+transfer_map.conf	REMOTE_DIR	データ元サーバ上の取得元Directory	/export/data
+johokei_s3_upload.sh	AWS_PROFILE_NAME	AWS CLIで使用するProfile名	johokei-s3-upload
+johokei_s3_upload.sh	KMS_KEY_ID	KMS KeyをCLIから明示指定する場合のみ設定	arn:aws:kms:ap-northeast-1:XXXXXXXXXXXX:key/XXXX
+実機環境	SFTP認証	Source Serverへ接続するためのSSH Key等を設定	実環境に合わせて設定
+実機環境	AWS CLI	AWS CLIのInstallおよびIAM認証情報設定	aws configure --profile johokei-s3-upload
