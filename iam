@@ -1,0 +1,138 @@
+可以，直接给你最终落地结论。按你现在这个项目的 Excel 格式，就这么填。
+
+1. 1.ロール：不改、不新增
+
+这次稲沢中継服务器是：
+
+AWS CLI
+↓
+IAM User 的 Access Key
+↓
+S3
+
+不是 AWS Service AssumeRole，所以 1.ロール 不需要追加任何内容。
+
+⸻
+
+2. 2.ポリシー：新增一条 S3 Policy
+
+在上面的 IAMポリシー一覧 最后一行追加：
+
+No.	IAMポリシー名	アタッチ対象	用途
+20	datautl-prd-gdp-iam-policy-s3-johokei-001	情報系データ連携用IAMユーザー	稲沢中継サーバから情報系Raw S3へのデータ転送、既存データ削除、および完了マーカー配置用
+
+然后在下面的 IAMポリシー詳細 继续追加一个章节，例如：
+
+2.2.20 datautl-prd-gdp-iam-policy-s3-johokei-001
+
+Policy 内容直接写：
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListJohokeiRawBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::datautl-prd-gdp-apne1-s3-bucket-johokei-raw"
+    },
+    {
+      "Sid": "TransferJohokeiRawData",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::datautl-prd-gdp-apne1-s3-bucket-johokei-raw/*"
+    }
+  ]
+}
+
+这四个权限对应我们脚本：
+
+ListBucket            → 查看Prefix中的旧文件
+PutObject             → 上传csv.gz、_COMPLETE
+DeleteObject          → 删除旧csv.gz、旧_COMPLETE
+AbortMultipartUpload  → 大文件上传异常时中止Multipart
+
+⸻
+
+3. 你截图里的 kms-001：原则上直接复用
+
+你现在这个：
+
+datautl-prd-gdp-iam-policy-kms-001
+
+已经有：
+
+"kms:Decrypt",
+"kms:GenerateDataKey"
+
+而且限定到了具体 KMS Key：
+
+arn:aws:kms:ap-northeast-1:182066453934:key/c31050f8-c23a-4009-a34a-0f6cf669d12d
+
+这正是我们 AWS CLI 向 SSE-KMS S3 上传时需要的权限组合。
+
+所以：
+
+如果这个 Key 就是 johokei-raw Bucket 使用的 SSE-KMS Key，那么 kms-001 不需要修改，也不用新建 kms-002。
+
+只需要让新的 IAM User 同时挂：
+
+datautl-prd-gdp-iam-policy-s3-johokei-001
+datautl-prd-gdp-iam-policy-kms-001
+
+如果后来确认这个 ARN 不是 johokei-raw 的 KMS Key，才新建 kms-002。
+
+⸻
+
+4. IAM User：新增一个
+
+你现在 Excel 没有 User Sheet，所以建议增加：
+
+3.ユーザー
+
+填：
+
+No.	IAMユーザー名	用途	コンソールアクセス	アクセスキー	IAMポリシー	備考
+1	datautl-prd-gdp-iam-user-johokei-001	稲沢中継サーバの情報系データ連携バッチAWS CLI用	無効	有効	datautl-prd-gdp-iam-policy-s3-johokei-001 / datautl-prd-gdp-iam-policy-kms-001	AWS CLI Profileで使用し、認証情報はShell内に保持しない
+
+这里不要把实际 Access Key ID / Secret Access Key 写进 Excel。
+
+实际构筑的时候才生成：
+
+Access Key ID
+Secret Access Key
+
+然后由实机人员配置：
+
+aws configure --profile johokei-batch
+
+Shell 里只写：
+
+AWS_PROFILE_NAME="johokei-batch"
+
+⸻
+
+所以你最终脑子里只要记这张图：
+
+3.ユーザー
+datautl-prd-gdp-iam-user-johokei-001
+        │
+        ├── 2.ポリシー
+        │   datautl-prd-gdp-iam-policy-s3-johokei-001
+        │
+        │   └─ S3 List / Put / Delete / Abort
+        │
+        └── 既存
+            datautl-prd-gdp-iam-policy-kms-001
+            └─ KMS Decrypt / GenerateDataKey
+                     │
+                     ▼
+       johokei-raw S3 Bucket
+
+结论：1.ロール不碰；2.ポリシー新增S3 Policy；现有kms-001能匹配目标KMS Key就直接复用；再增加一个IAM User记录。
