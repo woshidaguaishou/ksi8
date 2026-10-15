@@ -1,0 +1,555 @@
+# 4.4 監査・ログ 詳細設計書（NSD担当範囲）
+
+## 改定履歴
+
+| 日付         | 担当   | 版   | 内容                                      |
+| ---------- | ---- | ---:| --------------------------------------- |
+| 2026/10/15 | 王 云博 | 0.1 | 基本設計書「4.4 監査・ログ」を基に、NSD担当範囲の詳細設計ドラフトを作成 |
+| 2026/10/15 | 王 云博 | 0.2 | 設計状態、監視・アラート担当との連携事項、実機確認事項を明記          |
+
+## 1. 目的
+
+AIエージェント基盤で新たに取得するログについて、出力元、出力先、保持期間、暗号化、検索方法、相関キー、実装・確認事項を定義する。
+
+本書は基本設計書「4.4 監査・ログ」の具体化を目的とする。設計方針および共通パラメータは本書で確定し、対象リソース名・ARN等はMVP環境の実値を確認してパラメータ欄へ反映する。
+
+## 2. 対象範囲と責任分界
+
+### 2.1 本書の対象
+
+- UIレイヤーのアクセスログ・実行ログ
+- AgentCore Runtime実行ログ、トレーススパン
+- AgentCore Memory／Gateway／IdentityのVended Logs
+- Bedrock Model Invocation Logging
+- MCP／ToolレイヤーのLambda実行ログ
+- Knowledge Basesの取込ジョブログ
+- CloudWatch LogsおよびS3のログ保管設計
+- CloudWatch Logs Insights、GenAI Observability、Athenaによる調査方法
+- セッションID・トレースIDによるレイヤー横断のログ関連付け
+- Gateway Vended Logsの`isError`を対象とするメトリクスフィルター
+
+### 2.2 対象外
+
+| 項目                           | 扱い                            |
+| ---------------------------- | ----------------------------- |
+| CloudTrail・AWS Config        | 既存の組織証跡／ログアカウント連携を踏襲し、新規設計しない |
+| CloudWatch Agent             | サーバーレス構成のため導入しない              |
+| OpenSearch Serverlessのサービスログ | ログ出力機能がないため対象外。メトリクス監視で対応する   |
+| AgentCore Policyのログ          | ログ配信対象外。メトリクス監視で対応する          |
+| Snowflake Managed MCP内部ログ    | AWS側から取得できないため対象外             |
+| 会話履歴                         | 業務データであり、ログ管理の対象外             |
+| Alarmの閾値・評価期間・M/N・SNS通知      | 監視・アラート側で設計する                 |
+
+### 2.3 作業責任の境界
+
+| 作業                              | 主担当                   |
+| ------------------------------- | --------------------- |
+| ログ出力先、保持期間、暗号化、検索方法の詳細設計        | NSDログ担当               |
+| ロググループ、ログ配信、S3、Athena関連設定のIaC実装 | IaC担当と調整のうえ実装         |
+| Runtime／Lambdaの構造化ログ出力          | 各アプリケーション実装担当         |
+| AgentCore RuntimeへのADOT計装       | AgentCore Runtime実装担当 |
+| UIからのセッションID受け渡し                | MAI-LINKs実装担当         |
+| メトリクスフィルターのログ条件                 | NSDログ担当               |
+| メトリクスフィルターから作成するAlarm           | 監視・アラート担当             |
+
+### 2.4 設計状態の表記
+
+| 表記        | 意味                        | 完了条件                              |
+| --------- | ------------------------- | --------------------------------- |
+| **確定**    | 基本設計および既存基盤方針から決定済み       | 追加確認なし                            |
+| **三山連携**  | 監視・アラート側との境界または共通パラメータ    | 三山担当のAlarm設計と値・担当を一致させる           |
+| **実機確認**  | MVP環境または既存基盤から実値を取得する項目   | AWSコンソール／IaC／パラメータシートで確認し、本書へ転記する |
+| **他担当実装** | アプリケーションまたはリソース担当による実装が必要 | 担当者・実装チケット・完了予定を記録する              |
+
+### 2.5 三山担当との整合事項
+
+以下はログ設計とAlarm設計の交点であり、レビュー時に三山担当の設計と一致させる。
+
+| No.  | 整合項目                | ログ側で決める内容                                                  | 監視・アラート側で決める内容                               | 合わせる値                                     |
+| ----:| ------------------- | ---------------------------------------------------------- | -------------------------------------------- | ----------------------------------------- |
+| A-01 | Gatewayツール実行エラー     | Vended Logs、`isError`のフィールドパス、Metric Filter、Custom Metric名 | Threshold、Period、M/N、treatMissingData、SNS通知先 | Log Group、Metric Namespace／Name、Dimension |
+| A-02 | Knowledge Bases取込失敗 | 取込ログの出力先、保持、検索方法                                           | EventBridgeによる失敗通知、通知先                       | Knowledge Base ID、Data Source ID、失敗ステータス  |
+| A-03 | WAF攻撃兆候             | WAFログの出力先、取得Action、検索方法                                    | `BlockedRequests` Alarm                      | Web ACL ARN／Name、`us-east-1`、対象Action     |
+| A-04 | Identity認証失敗        | Identity Vended Logsの出力先、検索方法                              | 認証失敗メトリクスのAlarm                              | Identity Resource ID、リージョン、対象メトリクス        |
+| A-05 | GenAI Observability | Transaction Search、Trace、ログ出力の有効化                          | Dashboard／性能監視ウィジェット                         | Runtime／Endpoint ID、対象リージョン               |
+| A-06 | ログベース通知全般           | Metric Filterまで                                            | CloudWatch Alarm以降                           | Alarm作成責任の境界                              |
+
+> 本書ではA-01のMetric Filterまでをログ担当の成果物とする。Alarmリソース、SNS、メール通知は監視・アラート側の成果物とする。
+
+## 3. 全体構成
+
+```mermaid
+flowchart TB
+    SRC1["UIログ"] --> CW["CloudWatch Logs"]
+    SRC2["AgentCore・Bedrockログ"] --> CW
+    SRC3["MCP・KBログ"] --> CW
+    SRC4["CloudFront・WAFログ"] --> S3["S3ログ保管"]
+    CW --> OBS["GenAI Observability・Logs Insights"]
+    S3 --> ATH["Athena"]
+```
+
+## 4. 共通設計
+
+### 4.1 共通パラメータ
+
+| 設計項目                  | 設定値                                                    | 設定理由                                    |
+| --------------------- | ------------------------------------------------------ | --------------------------------------- |
+| AWSアカウント              | `datautl-prd-gdp`                                      | AIエージェント基盤の構築先                          |
+| 基本リージョン               | `ap-northeast-1`                                       | 基本設計のプライマリリージョン                         |
+| CloudFront WAF関連リージョン | `us-east-1`                                            | CloudFrontスコープのWAFおよびFirehoseを配置するリージョン |
+| CloudWatch Logs保持期間   | 545日（18か月）                                             | 既存のログ保管基準に準拠                            |
+| S3ログ保持期間              | 450日以上。451日目以降にExpiration                              | 既存のログ保管基準に準拠                            |
+| CloudWatch Logs暗号化    | 既存のログ用CMKを関連付ける                                        | 既存のログ保護方針に準拠                            |
+| CloudWatch Logs削除保護   | 有効                                                     | 誤削除防止                                   |
+| S3暗号化                 | 原則SSE-KMS（CMK）                                         | 既存のログ保護方針に準拠                            |
+| S3アクセスログ集約バケット        | `datautl-prd-gdp-apne1-s3-bucket-accesslog`            | 既存の集約先を利用                               |
+| ログ時刻                  | UTCで記録し、調査時にJSTへ変換                                     | AWSサービスログとの時刻統一                         |
+| ログ形式                  | CloudWatch Logsは原則JSON                                 | Logs Insightsでフィールド検索可能にするため            |
+| 機密情報                  | 認証情報、Cookie、Authorizationヘッダー、Secret、完全なアクセストークンを出力しない | 情報漏えい防止                                 |
+
+> S3サーバーアクセスログの配信先バケットのみ、既存設計どおりSSE-S3を適用する。
+
+### 4.2 命名方針
+
+命名規則の確定値は「2.3 命名規則」に従う。AWSサービスが標準名を生成する場合は標準名を優先し、それ以外は以下を暫定パターンとする。
+
+| リソース                 | 暫定命名パターン                                                                      |
+| -------------------- | ----------------------------------------------------------------------------- |
+| API Gatewayアクセスログ    | `/datautl/mai-links/prod/apigateway/access`                                   |
+| UI Lambdaログ          | `/aws/lambda/<ui-function-name>`                                              |
+| MCP Lambdaログ         | `/aws/lambda/<mcp-function-name>`                                             |
+| Runtimeログ            | `/aws/bedrock-agentcore/runtimes/<agent-id>-<endpoint-name>`                  |
+| Memory Vended Logs   | `/aws/vendedlogs/bedrock-agentcore/memory/APPLICATION_LOGS/<memory-id>`       |
+| Gateway Vended Logs  | `/aws/vendedlogs/bedrock-agentcore/gateway/APPLICATION_LOGS/<gateway-id>`     |
+| Identity Vended Logs | `/aws/vendedlogs/bedrock-agentcore/identity/APPLICATION_LOGS/<identity-id>`   |
+| Bedrock推論ログ          | `/aws/bedrock/modelinvocations`                                               |
+| Knowledge Bases取込ログ  | `/aws/vendedlogs/bedrock/knowledgebases/APPLICATION_LOGS/<knowledge-base-id>` |
+| Gatewayエラーカスタムメトリクス  | 名前空間：`MAI-LINKs/AgentCore/Gateway`、メトリクス名：`ToolExecutionErrors`               |
+
+## 5. ログ別詳細設計
+
+### 5.1 取得ログ一覧
+
+| ID         | ログ                     | 出力先             | 形式        | 保持・保護          | 設計状態            | 三山連携 | 実機確認                            |
+| ---------- | ---------------------- | --------------- | --------- | -------------- | --------------- | ---- | ------------------------------- |
+| LOG-UI-01  | CloudFrontアクセスログ       | S3              | 既存基盤方式    | 450日以上、SSE-KMS | 実機確認            | 不要   | Distribution ID、Bucket、既存ログ方式   |
+| LOG-UI-02  | WAFログ                  | Firehose経由S3    | JSON      | 450日以上、SSE-KMS | 三山連携・実機確認       | A-03 | Web ACL ARN、Firehose ARN、Bucket |
+| LOG-UI-03  | API Gatewayアクセスログ      | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 実機確認            | 不要   | API ID、Stage、API種別              |
+| LOG-UI-04  | UI補助API Lambda実行ログ     | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 実機確認・他担当実装      | 不要   | Function名、ログ出力実装                |
+| LOG-AG-01  | Runtime実行ログ            | CloudWatch Logs | JSON／標準出力 | 545日、CMK、削除保護  | 実機確認・他担当実装      | 不要   | Runtime／Endpoint ID、実ログ         |
+| LOG-AG-02  | トレーススパン                | Runtimeの`spans` | OTEL span | 545日、CMK、削除保護  | 三山連携・実機確認・他担当実装 | A-05 | Trace設定、ADOT、Span出力先            |
+| LOG-AG-03  | Memory Vended Logs     | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 実機確認            | 不要   | Memory ID／ARN、Delivery状態        |
+| LOG-AG-04  | Bedrock推論ログ            | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 実機確認            | A-05 | Logging設定、対象Model／Modalities    |
+| LOG-CN-01  | Gateway Vended Logs    | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 三山連携・実機確認       | A-01 | Gateway ID／ARN、`isError`実フィールド  |
+| LOG-CN-02  | Identity Vended Logs   | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 三山連携・実機確認       | A-04 | Identity ID／ARN、Delivery状態      |
+| LOG-MCP-01 | RAG MCP Lambda実行ログ     | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 実機確認・他担当実装      | A-01 | Function名、Session／Trace出力       |
+| LOG-MCP-02 | Snowflake接続Lambda実行ログ  | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 実機確認・他担当実装      | A-01 | Function名、Session／Trace出力       |
+| LOG-MCP-03 | Knowledge Bases取込ジョブログ | CloudWatch Logs | JSON      | 545日、CMK、削除保護  | 三山連携・実機確認       | A-02 | KB／Data Source ID、Delivery状態    |
+| LOG-CM-01  | S3サーバーアクセスログ           | 既存集約S3          | AWS標準形式   | 450日以上、SSE-S3  | 実機確認            | 不要   | 新規Bucket一覧、Logging設定            |
+
+### 5.2 UIレイヤー
+
+#### LOG-UI-01 CloudFrontアクセスログ
+
+| 設定項目           | 設定値・内容                                                                |
+| -------------- | --------------------------------------------------------------------- |
+| 対象Distribution | `<CloudFront Distribution ID：MVP一覧確定後に反映>`                            |
+| Logging        | 有効                                                                    |
+| 出力先            | `<CloudFront/WAFログ用S3バケット名>`                                          |
+| Prefix         | `cloudfront/<distribution-id>/year={yyyy}/month={MM}/day={dd}/`を基本とする |
+| Cookie Logging | 無効                                                                    |
+| 用途             | 配信結果、送信元IP、URI、HTTPステータス、User-Agent等のセキュリティ・原因調査                      |
+| Athena         | Distribution IDおよび日付で絞り込めるパーティションを設定                                  |
+| 未確定値           | Distribution ID、S3バケット、既存基盤が使用するStandard loggingのバージョン・形式             |
+
+#### LOG-UI-02 WAFログ
+
+| 設定項目            | 設定値・内容                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------- |
+| 対象Web ACL       | `<CloudFront用Web ACL ARN>`                                                             |
+| リージョン           | `us-east-1`                                                                            |
+| 出力経路            | WAF → Amazon Data Firehose → S3                                                        |
+| Firehose        | 既存経路を再利用する。Delivery Stream ARNは既存パラメータから取得                                             |
+| Firehose名称条件    | `aws-waf-logs-`で開始                                                                     |
+| Prefix          | `waf/<web-acl-name>/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/` |
+| 出力形式            | JSON、GZIP圧縮                                                                            |
+| Redacted fields | `authorization`、`cookie`等、認証情報を含み得るヘッダー                                                |
+| Logging Filter  | 初回本番はBLOCKを必須取得。COUNT／CAPTCHA／CHALLENGEの取得要否はWAFルール確定後に反映                              |
+| 未確定値            | Web ACL ARN、Firehose ARN、S3バケット、取得対象Action                                             |
+
+#### LOG-UI-03 API Gatewayアクセスログ
+
+| 設定項目        | 設定値・内容                                                                                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 対象API／Stage | `<API ID>`／`<Stage名>`                                                                                                                           |
+| 出力先         | `/datautl/mai-links/prod/apigateway/access`                                                                                                     |
+| 形式          | JSON                                                                                                                                            |
+| 出力項目        | `requestId`、`extendedRequestId`、`requestTime`、`sourceIp`、`httpMethod`、`routeKey`、`status`、`protocol`、`responseLength`、`integrationErrorMessage` |
+| 本文出力        | リクエスト／レスポンス本文は出力しない                                                                                                                             |
+| 保持・保護       | 545日、CMK、削除保護有効                                                                                                                                 |
+
+アクセスログ形式案：
+
+```json
+{
+  "requestId": "$context.requestId",
+  "extendedRequestId": "$context.extendedRequestId",
+  "requestTime": "$context.requestTime",
+  "sourceIp": "$context.identity.sourceIp",
+  "httpMethod": "$context.httpMethod",
+  "routeKey": "$context.routeKey",
+  "status": "$context.status",
+  "protocol": "$context.protocol",
+  "responseLength": "$context.responseLength",
+  "integrationErrorMessage": "$context.integrationErrorMessage"
+}
+```
+
+#### LOG-UI-04 UI補助API Lambda実行ログ
+
+| 設定項目                | 設定値・内容                           |
+| ------------------- | -------------------------------- |
+| LogFormat           | JSON                             |
+| ApplicationLogLevel | INFO                             |
+| SystemLogLevel      | INFO                             |
+| ロググループ              | `/aws/lambda/<ui-function-name>` |
+| 必須フィールド             | 5.6の共通アプリケーションログ仕様に従う            |
+| 保持・保護               | 545日、CMK、削除保護有効                  |
+
+### 5.3 AIエージェント関連
+
+#### LOG-AG-01／02 Runtime実行ログ・トレーススパン
+
+| 設定項目                      | 設定値・内容                                                       |
+| ------------------------- | ------------------------------------------------------------ |
+| Runtimeロググループ             | `/aws/bedrock-agentcore/runtimes/<agent-id>-<endpoint-name>` |
+| 実行ログストリーム                 | `runtime-logs`またはセッション単位のサービス標準ストリーム                         |
+| スパンストリーム                  | `spans`                                                      |
+| Transaction Search        | アカウント単位で有効化                                                  |
+| Structured span ingestion | 有効                                                           |
+| Trace destination         | CloudWatch Logs                                              |
+| Unified trace destination | 有効。Runtimeロググループへ集約                                          |
+| ADOT                      | `aws-opentelemetry-distro>=0.18.0`をコンテナへ追加                   |
+| 起動方式                      | `opentelemetry-instrument`経由                                 |
+| セッションID                   | `X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`で受け渡す           |
+| トレースID                    | Runtimeが自動発行し、ADOTでBedrock→Gateway→Toolへ伝播                   |
+| 保持・保護                     | 545日、CMK、削除保護有効                                              |
+
+コンテナ起動例：
+
+```dockerfile
+CMD ["opentelemetry-instrument", "python", "main.py"]
+```
+
+#### LOG-AG-03／LOG-CN-01／LOG-CN-02 Vended Logs
+
+| 設定項目          | 設定値・内容                                        |
+| ------------- | --------------------------------------------- |
+| 対象            | Memory、Gateway、Identity                       |
+| Log Type      | `APPLICATION_LOGS`                            |
+| Destination   | CloudWatch Logs                               |
+| Output Format | JSON                                          |
+| 構成リソース        | Delivery Source、Delivery Destination、Delivery |
+| Delivery状態    | `ACTIVE`であることを確認                              |
+| 権限            | ログ配信作成権限、Destinationへの書込み権限を付与                |
+| 保持・保護         | 545日、CMK、削除保護有効                               |
+| 実値            | 各リソースARN／ID、Delivery名をMVP一覧確定後に反映             |
+
+#### LOG-AG-04 Bedrock推論ログ
+
+| 設定項目    | 設定値・内容                                                        |
+| ------- | ------------------------------------------------------------- |
+| 機能      | Model Invocation Logging                                      |
+| 対象リージョン | `ap-northeast-1`                                              |
+| 出力先     | CloudWatch Logs                                               |
+| ロググループ  | `/aws/bedrock/modelinvocations`                               |
+| 対象モダリティ | Textを有効。Image／Embedding／VideoはMVP利用有無に応じて設定                   |
+| 入出力本文   | 基本設計に従い記録する                                                   |
+| サービスロール | Bedrockが`logs:CreateLogStream`、`logs:PutLogEvents`を実行可能な専用ロール |
+| 保持・保護   | 545日、CMK、削除保護有効                                               |
+| 注意      | 認証情報、個人情報、機密情報の入力抑止・マスキング方針は4.7セキュリティ設計に従う                    |
+
+### 5.4 MCP／Toolレイヤー
+
+#### LOG-MCP-01／02 Lambda実行ログ
+
+| 設定項目                | 設定値・内容                                                    |
+| ------------------- | --------------------------------------------------------- |
+| 対象                  | RAG MCP Lambda、Snowflake接続Lambda                          |
+| LogFormat           | JSON                                                      |
+| ApplicationLogLevel | INFO                                                      |
+| SystemLogLevel      | INFO                                                      |
+| ロググループ              | `/aws/lambda/<function-name>`                             |
+| 必須フィールド             | 共通フィールド＋`tool_name`、`target_type`、`elapsed_ms`、`is_error` |
+| セッション／トレース          | 受信した`session_id`、`trace_id`をログへ出力                         |
+| Snowflake関連         | クエリ本文・認証情報を出力せず、処理結果、エラーコード、経過時間のみ記録                      |
+| 保持・保護               | 545日、CMK、削除保護有効                                           |
+
+#### LOG-MCP-03 Knowledge Bases取込ジョブログ
+
+| 設定項目          | 設定値・内容                                                                                                                            |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Log Type      | `APPLICATION_LOGS`                                                                                                                |
+| 出力先           | CloudWatch Logs                                                                                                                   |
+| Output Format | JSON                                                                                                                              |
+| 構成            | PutDeliverySource → PutDeliveryDestination → CreateDelivery相当のIaC                                                                 |
+| 主要フィールド       | `ingestion_job_id`、`data_source_id`、`knowledge_base_arn`、`document_location`、`status`、`status_reasons`、`chunk_statistics`、`level` |
+| 用途            | 取込ジョブおよび文書単位の成功・失敗原因調査                                                                                                            |
+| 保持・保護         | 545日、CMK、削除保護有効                                                                                                                   |
+
+### 5.5 Gateway `isError`メトリクスフィルター
+
+| 設定項目             | 設定値・内容                                                              |
+| ---------------- | ------------------------------------------------------------------- |
+| 対象ログ             | Gateway Vended Logs                                                 |
+| 対象条件             | JSONフィールド`isError`がBooleanの`true`                                   |
+| 暫定フィルターパターン      | `{ $.isError = true }`                                              |
+| Metric Namespace | `MAI-LINKs/AgentCore/Gateway`                                       |
+| Metric Name      | `ToolExecutionErrors`                                               |
+| Metric Value     | `1`                                                                 |
+| Default Value    | `0`                                                                 |
+| Unit             | Count                                                               |
+| Dimension        | ログの実フィールド確認後、`gatewayId`、`targetName`または`targetType`を採用             |
+| Alarm            | 閾値、Period、Evaluation Periods、Datapoints to Alarm、SNS通知先は監視・アラート側で定義 |
+
+> `isError`の実際の型・フィールドパスは、MVP環境でGateway Vended Logsのサンプルを取得して確定する。文字列`"true"`で出力される場合はフィルターパターンを修正する。
+
+### 5.6 共通アプリケーションログ仕様
+
+RuntimeおよびLambdaのアプリケーションログは、次のJSON項目を共通化する。
+
+| フィールド            | 必須       | 内容                                           |
+| ---------------- | --------:| -------------------------------------------- |
+| `timestamp`      | ○        | ISO 8601 UTC                                 |
+| `level`          | ○        | `DEBUG`／`INFO`／`WARN`／`ERROR`                |
+| `service`        | ○        | サービスまたは機能名                                   |
+| `environment`    | ○        | `prod`等                                      |
+| `message`        | ○        | 事象の概要。機密情報を含めない                              |
+| `event_type`     | ○        | `request_received`、`tool_completed`、`error`等 |
+| `result`         | ○        | `success`／`failure`                          |
+| `session_id`     | 条件付      | エージェント会話に関連する処理で必須                           |
+| `trace_id`       | 条件付      | Runtime以降の処理で必須                              |
+| `aws_request_id` | Lambdaのみ | Lambda invocationのRequest ID                 |
+| `request_id`     | 条件付      | API／Gateway等のリクエストID                         |
+| `tool_name`      | Toolのみ   | 実行したツール名                                     |
+| `elapsed_ms`     | ○        | 処理時間                                         |
+| `error_code`     | 失敗時      | アプリケーションまたはAWSのエラーコード                        |
+| `error_type`     | 失敗時      | 例外クラス等                                       |
+| `stack_trace`    | 失敗時      | ERROR時のみ。機密情報を除外                             |
+
+ログ出力禁止項目：
+
+- パスワード、Secret、APIキー、アクセストークン
+- Authorizationヘッダー、Cookie全文
+- Snowflake接続情報
+- 不要な個人情報
+- Bedrock推論ログ以外のアプリログへのプロンプト／回答全文の重複記録
+
+## 6. 相関キー設計
+
+### 6.1 キーの関係
+
+| キー               | 発行元               | 利用範囲                         | 関係        |
+| ---------------- | ----------------- | ---------------------------- | --------- |
+| セッションID          | MAI-LINKsフロントエンド  | UI～Runtime                   | 1会話に1つ    |
+| トレースID           | AgentCore Runtime | Runtime～Bedrock～Gateway～Tool | 1問い合わせに1つ |
+| AWS Request ID   | 各AWSサービス          | 個別サービス内部                     | 個別呼出しごと   |
+| Ingestion Job ID | Knowledge Bases   | KB取込                         | 取込ジョブごと   |
+
+セッションID対トレースIDは1対Nとする。利用者申告からの調査はセッションIDと発生時刻を入口とし、対象問い合わせのトレースIDを特定して下流ログを横断する。
+
+### 6.2 受け渡し
+
+1. MAI-LINKsがセッションIDを採番する。
+2. Runtime呼出し時に`X-Amzn-Bedrock-AgentCore-Runtime-Session-Id`へ設定する。
+3. RuntimeはトレースIDを発行する。
+4. ADOTがRuntime→Bedrock→Gateway→Lambdaへトレースコンテキストを伝播する。
+5. RuntimeおよびLambdaのアプリケーションログへ`session_id`と`trace_id`を出力する。
+
+## 7. ログ検索・分析設計
+
+### 7.1 調査の入口
+
+| 調査内容          | 最初に使用する画面・機能                      | 次の確認先                                 |
+| ------------- | --------------------------------- | ------------------------------------- |
+| エージェント応答失敗・遅延 | GenAI Observability Sessions View | Traces View → Logs Insights           |
+| API／Lambdaエラー | CloudWatch Logs Insights          | API Gateway→LambdaログをRequest ID／時刻で突合 |
+| ツール失敗         | Traces View                       | Gateway Vended Logs→対象Lambdaログ        |
+| KB同期失敗        | Knowledge Bases取込ログ               | `ingestion_job_id`または文書URIで検索         |
+| WAF遮断・不正アクセス  | Athena                            | WAF／CloudFrontログをIP・URI・時刻で突合         |
+
+### 7.2 Logs Insights保存クエリ
+
+#### セッションID検索
+
+```sql
+fields @timestamp, @log, @logStream, level, message, session_id, trace_id
+| filter session_id = "<session-id>"
+| sort @timestamp asc
+```
+
+#### トレースID検索
+
+```sql
+fields @timestamp, @log, @logStream, level, message, trace_id, tool_name, is_error
+| filter trace_id = "<trace-id>"
+| sort @timestamp asc
+```
+
+#### Lambdaエラー検索
+
+```sql
+fields @timestamp, @log, level, message, aws_request_id, session_id, trace_id, error_code
+| filter level = "ERROR" or result = "failure"
+| sort @timestamp desc
+```
+
+#### Knowledge Bases取込失敗検索
+
+```sql
+fields @timestamp, event.ingestion_job_id, event.document_location.s3_location.uri,
+       event.status, event.status_reasons, level
+| filter level = "ERROR" or level = "WARN"
+| sort @timestamp desc
+```
+
+### 7.3 Athena
+
+| 項目           | 設計                                          |
+| ------------ | ------------------------------------------- |
+| Workgroup    | 既存`datautl-prd-gdp-wg`の利用可否を確認し、利用可能な場合は再利用 |
+| Database     | `<ログ分析用Glue Database名>`                     |
+| Table        | CloudFront、WAF、S3アクセスログごとに作成                |
+| Partition    | 原則`year`／`month`／`day`                      |
+| Query result | 既存のAthenaクエリ結果バケットを利用。なければ新設                |
+| 暗号化          | Athenaクエリ結果をSSE-KMSで暗号化                     |
+
+## 8. IAM・KMS設計方針
+
+### 8.1 IAM
+
+最小権限とし、具体的なARNはリソース確定後に限定する。
+
+| 主体                                   | 主な権限                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------- |
+| Bedrock Model Invocation Logging用ロール | 対象ロググループへの`logs:CreateLogStream`、`logs:PutLogEvents`                          |
+| Vended Logs設定実行ロール                   | `logs:PutDeliverySource`、`logs:PutDeliveryDestination`、`logs:CreateDelivery`等 |
+| Knowledge Basesログ設定者                 | `bedrock:AllowVendedLogDeliveryForResource`およびログ配信設定権限                        |
+| Runtime実行ロール                         | Trace／ログ出力、必要なリソースポリシー設定権限                                                    |
+| Firehoseロール                          | 対象S3 Prefixへの書込み、KMSデータキー生成                                                   |
+| 運用参照ロール                              | Logs Insights、GenAI Observability、Athena、対象S3ログの読取り                           |
+
+### 8.2 KMS
+
+- CloudWatch Logs用CMKのKey Policyに、対象リージョンのCloudWatch Logsサービスプリンシパルを許可する。
+- S3ログ用CMKのKey Policyに、CloudFrontログ配信およびFirehoseロールからの`kms:GenerateDataKey`等を許可する。
+- KMS Key ARNは既存セキュリティ設計の値を参照し、本書に転記する。
+
+## 9. IaC実装対象
+
+| 分類                 | IaC対象                                                              |
+| ------------------ | ------------------------------------------------------------------ |
+| CloudWatch Logs    | Log Group、Retention 545日、KMS Key、Deletion Protection、Metric Filter |
+| AgentCore          | Vended LogsのDelivery Source／Destination／Delivery、Tracing設定         |
+| Transaction Search | X-RayからCloudWatch Logsへのリソースポリシー、Trace Segment Destination         |
+| Bedrock            | Model Invocation Logging設定、サービスロール                                 |
+| API Gateway        | StageのAccess Log Settings                                          |
+| Lambda             | LoggingConfig、Log Group                                            |
+| WAF／Firehose       | Logging Configuration、Delivery Streamとの関連付け                        |
+| S3                 | バケット、Prefix、Lifecycle、Bucket Policy、暗号化、Server Access Logging      |
+| Athena／Glue        | Database、Table、Partition管理、Workgroup関連設定                           |
+
+IaCサービスが一部設定に対応しない場合は、カスタムリソースまたはデプロイスクリプトを使用し、同じパイプライン内で冪等に適用する。
+
+## 10. 試験・確認項目
+
+| No. | 確認項目                    | 合格条件                                                     |
+| ---:| ----------------------- | -------------------------------------------------------- |
+| 1   | API Gatewayアクセスログ       | テスト呼出しのRequest ID、Status、RouteがJSONで記録される                |
+| 2   | Lambda実行ログ              | INFO／ERRORログがJSONで出力され、Session ID／Trace IDを検索できる         |
+| 3   | Runtime実行ログ             | 対象セッションの実行ログを確認できる                                       |
+| 4   | トレース                    | Runtime→Bedrock→Gateway→Toolが同一Trace IDで表示される            |
+| 5   | Memory／Gateway／Identity | DeliveryがACTIVEで、テスト操作のVended Logsが出力される                 |
+| 6   | Bedrock推論ログ             | テスト推論のモデルID、Request ID、入出力が記録される                         |
+| 7   | KB取込ログ                  | テスト文書の取込ステータスとIngestion Job IDを確認できる                     |
+| 8   | Gateway `isError`       | エラーレスポンスのログ1件からカスタムメトリクスが1加算される                          |
+| 9   | CloudFront／WAF          | S3の所定Prefixへログファイルが配信される                                 |
+| 10  | 保持・暗号化                  | Retention、CMK、Deletion Protection、S3 Lifecycleが設計値どおりである |
+| 11  | Logs Insights           | Session ID／Trace IDの保存クエリで対象ログを横断検索できる                   |
+| 12  | Athena                  | CloudFront／WAFログを日付、IP、URIで検索できる                         |
+| 13  | 機密情報                    | Authorization、Cookie、Secret等がログに出力されない                   |
+
+## 11. 実値確認・他担当依頼事項
+
+### 11.1 実機環境で確認するリソース情報
+
+次の値は設計で新たに決める値ではなく、MVP環境または既存基盤から取得して本書へ転記する値である。
+
+| No.  | 確認対象                  | 取得する値                                                                        | 確認場所・方法                               | 本書の反映先             |
+| ----:| --------------------- | ---------------------------------------------------------------------------- | ------------------------------------- | ------------------ |
+| E-01 | AWSアカウント              | Account ID、Account Alias                                                     | AWS Console右上／STS `GetCallerIdentity` | IAM、KMS、各ARN       |
+| E-02 | KMS                   | CloudWatch Logs用CMK ARN、S3ログ用CMK ARN、Key Policy                              | KMS Console／IaC／既存パラメータシート            | 4.1、8.2            |
+| E-03 | CloudFront            | Distribution ID、ARN、Domain、Logging設定                                         | CloudFront Console／IaC                | LOG-UI-01          |
+| E-04 | CloudFrontログ用S3       | Bucket名、Region、Prefix、Encryption、Lifecycle、Bucket Policy                     | S3 Console／IaC                        | LOG-UI-01、4.1      |
+| E-05 | WAF                   | Web ACL Name／ID／ARN、Scope、Logging Filter                                     | WAF Console `us-east-1`／IaC           | LOG-UI-02、A-03     |
+| E-06 | Firehose              | Delivery Stream Name／ARN、Region、Destination Bucket／Prefix、Buffer、Compression | Firehose Console `us-east-1`／IaC      | LOG-UI-02          |
+| E-07 | API Gateway           | API ID、API種別（REST／HTTP）、Stage名、既存Access Log設定                                | API Gateway Console／IaC               | LOG-UI-03          |
+| E-08 | UI Lambda             | Function Name／ARN、Runtime、LoggingConfig、Log Group                            | Lambda Console／IaC                    | LOG-UI-04          |
+| E-09 | AgentCore Runtime     | Runtime ID／ARN、Endpoint Name／ARN、Log Group、Tracing設定                         | AgentCore Console／CLI／IaC             | LOG-AG-01／02、A-05  |
+| E-10 | AgentCore Memory      | Memory ID／ARN、Log Delivery、Delivery Source／Destination／Delivery              | AgentCore／CloudWatch Logs Console     | LOG-AG-03          |
+| E-11 | AgentCore Gateway     | Gateway ID／ARN、Target一覧、Log Delivery、ログサンプル                                  | AgentCore／CloudWatch Logs Console     | LOG-CN-01、5.5、A-01 |
+| E-12 | AgentCore Identity    | Identity Resource ID／ARN、Log Delivery、ログサンプル                                 | AgentCore／CloudWatch Logs Console     | LOG-CN-02、A-04     |
+| E-13 | Bedrock               | 利用Model ID、Modalities、Model Invocation Logging、Service Role                  | Bedrock Console Settings／IaC          | LOG-AG-04          |
+| E-14 | MCP Lambda            | RAG／Snowflake Function Name／ARN、Runtime、Log Group                            | Lambda Console／IaC                    | LOG-MCP-01／02      |
+| E-15 | Knowledge Bases       | Knowledge Base ID／ARN、Data Source ID、Log Delivery                            | Bedrock Knowledge Bases Console／IaC   | LOG-MCP-03、A-02    |
+| E-16 | 追加S3バケット              | Bucket一覧、Server Access Logging設定                                             | S3 Console／IaC                        | LOG-CM-01          |
+| E-17 | Athena／Glue           | Workgroup、Database、Table、Query Result Bucket                                 | Athena／Glue Console／IaC               | 7.3                |
+| E-18 | Transaction Search    | 有効／無効、Trace Segment Destination、Span Log Group                               | CloudWatch／X-Ray Console、CLI          | LOG-AG-02          |
+| E-19 | 全CloudWatch Log Group | Name、Retention、KMS Key、Deletion Protection                                   | CloudWatch Logs Console／IaC           | 4.1、5章             |
+
+### 11.2 実ログを取得して確定する項目
+
+| No.  | 対象ログ                 | 確認内容                                         | 確定する設計値                 |
+| ----:| -------------------- | -------------------------------------------- | ----------------------- |
+| S-01 | Gateway Vended Logs  | `isError`の型、フィールドパス、Gateway／Target識別フィールド    | Metric Filter、Dimension |
+| S-02 | Runtime実行ログ／Span     | `session.id`、`traceId`、Log Stream名           | Logs Insightsクエリ、調査手順   |
+| S-03 | Memory Vended Logs   | Resource ID、Session関連フィールド、Errorフィールド        | 検索クエリ                   |
+| S-04 | Identity Vended Logs | Identity識別子、結果、エラーコード                        | 検索クエリ、A-04との整合          |
+| S-05 | Bedrock推論ログ          | `requestId`、`modelId`、入力・出力フィールド、100KB超過時の挙動 | 検索クエリ、必要時のS3併用          |
+| S-06 | KB取込ログ               | Status、`status_reasons`、文書URI、Job ID         | 失敗検索クエリ、A-02との整合        |
+| S-07 | Runtime／Lambdaアプリログ  | `session_id`、`trace_id`、`aws_request_id`の出力  | 横断検索クエリ、試験項目            |
+
+### 11.3 他担当へ依頼する実装
+
+| No.  | 依頼内容                                               | 依頼先         | 本書で指定する受入条件                     |
+| ----:| -------------------------------------------------- | ----------- | ------------------------------- |
+| R-01 | UIからRuntimeへセッションIDを渡し、UI側へ時刻・結果とともに記録             | MAI-LINKs担当 | Session IDから対象会話を特定できる          |
+| R-02 | RuntimeアプリログへSession ID／Trace IDをJSON出力            | Runtime担当   | Logs Insightsで両キーを検索できる         |
+| R-03 | RuntimeコンテナへADOTを導入し、`opentelemetry-instrument`で起動 | Runtime担当   | Runtime→Gateway→ToolのTraceが連結する |
+| R-04 | RAG／Snowflake Lambdaへ共通ログ項目を実装                     | MCP担当       | 5.6の必須フィールドを出力する                |
+| R-05 | 各ログ設定をIaCへ反映                                       | IaC担当       | 再適用可能で、環境差分を変数管理する              |
+| R-06 | 本文を含むログのマスキング／アクセス制御方針を確定                          | セキュリティ担当    | 4.7セキュリティ設計との不整合がない             |
+
+### 11.4 詳細設計完了判定
+
+以下をすべて満たした時点で、本書を詳細設計の確定版とする。
+
+- E-01～E-19の実値が本書へ反映されている。
+- S-01～S-07のログサンプル確認が完了し、フィールド名と検索クエリが確定している。
+- A-01～A-06について三山担当の監視・アラート設計と一致している。
+- R-01～R-06の実装担当および受入条件が合意されている。
+- 第10章の試験項目に、実際の確認コマンドまたは画面操作が追記されている。
+
+## 12. 参照資料
+
+- 基本設計書「4.4 監査・ログ」
+- 基本設計書「4.3 監視・アラート」
+- [AgentCore Observabilityの設定](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-configure.html)
+- [AgentCoreが生成するObservabilityデータ](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability-service-provided.html)
+- [Bedrock Model Invocation Logging](https://docs.aws.amazon.com/bedrock/latest/userguide/model-invocation-logging.html)
+- [Knowledge BasesのCloudWatch Logs監視](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-bases-logging.html)
+- [CloudFront Standard Logging](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/standard-logging.html)
+- [WAFログのFirehose配信](https://docs.aws.amazon.com/waf/latest/developerguide/logging-kinesis.html)
+- [API Gatewayアクセスログ](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-logging.html)
+- [Lambda JSONログ](https://docs.aws.amazon.com/lambda/latest/dg/monitoring-cloudwatchlogs-logformat.html)
+- [CloudWatch Logs削除保護](https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/protecting-log-groups-from-deletion.html)
