@@ -16,6 +16,21 @@
 15	全データの処理が正常終了するとS3 Bucket直下に「_COMPLETE」が作成される	なし	_COMPLETEが全処理正常終了の確認ポイント
 16	実行後、logディレクトリおよびS3の「_COMPLETE」を確認する	なし	LogはScript配置ディレクトリ配下に自動作成
 
+No.	作業内容	実施内容
+1	追加サーバー情報の確認	追加するオンプレサーバーのSOURCE_USER、SOURCE_HOST、SOURCE_PORT、REMOTE_DIRを確認する
+2	対象データの確認	取得対象のFILE_NAME_PREFIXと格納先S3_PREFIXを確認する
+3	設定追加	transfer_map.confに追加サーバー分の設定を1行追加する
+4	設定確認	追加したHost、Directory、FILE_NAME_PREFIX、S3_PREFIXに誤りがないことを確認する
+5	バッチ実行	johokei_sftp_pull.shを手動実行する
+6	結果確認	対象ファイルが中継サーバー経由で指定したS3 Prefixへ格納されることを確認する
+
+
+
+Y|batchuser|server02|22|/data/export|AA_昇降機情報|P01010_AA
+接続先サーバーが追加された場合でも、SFTP取得およびS3転送の処理方式に変更がなければ、Shell本体の修正は不要です。
+transfer_map.conf に接続先情報を追加することで対応します。
+
+
 
 
 
