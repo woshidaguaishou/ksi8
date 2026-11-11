@@ -1,0 +1,29 @@
+情報系データ連携バッチ　_COMPLETEのテーブル単位対応
+
+対象: johokei_s3_upload.sh（S3転送側のみ）
+既存の johokei_sftp_pull.sh と transfer_map.conf のフォーマットは変更しない。
+
+【修正内容】
+1. _COMPLETEはs3://datautl-prd-gdp-apne1-s3-bucket-johokei-raw/<S3_PREFIX>/_COMPLETE に作成する。
+2. テーブル単位で、既存マーカー削除→旧*.csv.gz削除→新*.csv.gz格納→_COMPLETE作成を実施。
+3. 失敗テーブルには_COMPLETEを出さず、他テーブルの処理は継続する。
+4. 失敗時に再実行した場合、完了済みテーブルを再アップロードしない（ローカル.S3_TABLE_DONEで状態管理）。
+5. 旧仕様のバケット直下_COMPLETEは削除し、以降作成しない。
+6. 初期ロードの*.csvは削除対象外（従来仕様）。
+
+【差し替え】
+1. 既存johokei_s3_upload.shをバックアップする。
+2. 新しいjohokei_s3_upload.shに置き換える。
+3. S3_BUCKET、AWS_PROFILE_NAME、KMS_KEY_IDを確認する。
+4. bash -n johokei_s3_upload.shで構文確認する。
+5. テスト用のテーブル/Prefixで実行し、表ごとに_COMPLETEができること、失敗テーブルにはできないことを確認する。
+
+【実行】
+通常: johokei_sftp_pull.sh を手動実行すると、成功後にS3側が呼び出される。
+S3段階だけが失敗して .PULL_COMPLETE が残った場合:
+  bash johokei_s3_upload.sh <STAGING_ROOT>
+
+【検証】
+Bash構文チェックOK。
+模擬AWS CLI試験: 3テーブル中1テーブルでアップロード失敗→残り2テーブルに_COMPLETEを作成→失敗表のみ再実行で_COMPLETE→成功表の二重アップロードなし、を確認。
+実環境への未適用、実AWSでの結合試験は未実施。
